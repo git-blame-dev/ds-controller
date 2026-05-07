@@ -1,0 +1,12 @@
+#ifndef DS_CONTROLLER_CONFIG_H
+#define DS_CONTROLLER_CONFIG_H
+
+#ifndef DS_CONTROLLER_PC_IP
+#define DS_CONTROLLER_PC_IP "192.168.1.100"
+#endif
+
+#ifndef DS_CONTROLLER_PC_PORT
+#define DS_CONTROLLER_PC_PORT 26760
+#endif
+
+#endif
