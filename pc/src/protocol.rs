@@ -48,6 +48,11 @@ impl Buttons {
     pub fn contains(self, button: Self) -> bool {
         self.0 & button.0 != 0
     }
+
+    #[cfg(test)]
+    pub fn raw(self) -> u16 {
+        self.0
+    }
 }
 
 impl fmt::Display for Buttons {
@@ -158,6 +163,18 @@ pub fn parse_controller_state(packet: &[u8]) -> Result<ControllerState, ParseErr
     })
 }
 
+#[cfg(test)]
+pub fn encode_controller_state_for_test(state: ControllerState) -> [u8; PACKET_SIZE] {
+    let mut packet = [0u8; PACKET_SIZE];
+    packet[0..4].copy_from_slice(MAGIC);
+    packet[4] = VERSION;
+    packet[5] = MESSAGE_TYPE_CONTROLLER_STATE;
+    packet[6..8].copy_from_slice(&(PACKET_SIZE as u16).to_le_bytes());
+    packet[8..12].copy_from_slice(&state.sequence.to_le_bytes());
+    packet[12..14].copy_from_slice(&state.buttons.raw().to_le_bytes());
+    packet
+}
+
 pub fn is_newer_sequence(candidate: u32, current: u32) -> bool {
     candidate != current && candidate.wrapping_sub(current) < 0x8000_0000
 }
@@ -175,6 +192,19 @@ mod tests {
         packet[8..12].copy_from_slice(&sequence.to_le_bytes());
         packet[12..14].copy_from_slice(&buttons.to_le_bytes());
         packet
+    }
+
+    #[test]
+    fn encodes_golden_controller_state_packet() {
+        let packet = encode_controller_state_for_test(ControllerState {
+            sequence: 42,
+            buttons: Buttons::from_bits_truncate(Buttons::A.raw() | Buttons::DPAD_UP.raw()),
+        });
+
+        assert_eq!(
+            packet,
+            [b'D', b'S', b'C', b'P', 1, 1, 16, 0, 42, 0, 0, 0, 1, 1, 0, 0,]
+        );
     }
 
     #[test]
