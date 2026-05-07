@@ -1,3 +1,4 @@
+mod mapping;
 mod protocol;
 mod receiver;
 
@@ -6,6 +7,7 @@ use std::net::SocketAddr;
 use std::process::ExitCode;
 use std::time::Duration;
 
+use mapping::map_ds_to_xbox;
 use receiver::{Receiver, ReceiverConfig, ReceiverEvent};
 
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:26760";
@@ -223,8 +225,13 @@ fn main() -> ExitCode {
     loop {
         match receiver.next_event() {
             Ok(ReceiverEvent::State { sender, state }) => {
+                let output = map_ds_to_xbox(state);
+
                 if args.print_packets {
-                    println!("{sender} seq={} buttons={}", state.sequence, state.buttons);
+                    println!(
+                        "{sender} seq={} ds={} xbox={}",
+                        state.sequence, state.buttons, output.buttons
+                    );
                 }
             }
             Ok(ReceiverEvent::Timeout) => {
