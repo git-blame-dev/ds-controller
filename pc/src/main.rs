@@ -1,0 +1,149 @@
+mod protocol;
+mod receiver;
+
+use std::env;
+use std::net::SocketAddr;
+use std::process::ExitCode;
+use std::time::Duration;
+
+use receiver::{Receiver, ReceiverConfig, ReceiverEvent};
+
+const DEFAULT_BIND_ADDR: &str = "0.0.0.0:26760";
+const DEFAULT_TIMEOUT_MS: u64 = 150;
+
+#[derive(Debug)]
+struct Args {
+    bind_addr: SocketAddr,
+    timeout: Duration,
+    accept_first_sender: bool,
+    sender: Option<SocketAddr>,
+    print_packets: bool,
+    no_vigem: bool,
+}
+
+impl Args {
+    fn parse() -> Result<Self, String> {
+        let mut bind_addr = DEFAULT_BIND_ADDR
+            .parse::<SocketAddr>()
+            .map_err(|error| format!("invalid default bind address: {error}"))?;
+        let mut timeout = Duration::from_millis(DEFAULT_TIMEOUT_MS);
+        let mut accept_first_sender = false;
+        let mut sender = None;
+        let mut print_packets = false;
+        let mut no_vigem = false;
+
+        let mut args = env::args().skip(1);
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--bind" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| "--bind requires <addr:port>".to_owned())?;
+                    bind_addr = value
+                        .parse::<SocketAddr>()
+                        .map_err(|error| format!("invalid --bind value '{value}': {error}"))?;
+                }
+                "--timeout-ms" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| "--timeout-ms requires <ms>".to_owned())?;
+                    let millis = value.parse::<u64>().map_err(|error| {
+                        format!("invalid --timeout-ms value '{value}': {error}")
+                    })?;
+                    timeout = Duration::from_millis(millis);
+                }
+                "--sender" => {
+                    let value = args
+                        .next()
+                        .ok_or_else(|| "--sender requires <addr:port>".to_owned())?;
+                    sender =
+                        Some(value.parse::<SocketAddr>().map_err(|error| {
+                            format!("invalid --sender value '{value}': {error}")
+                        })?);
+                }
+                "--accept-first-sender" => accept_first_sender = true,
+                "--print-packets" => print_packets = true,
+                "--no-vigem" => no_vigem = true,
+                "--help" | "-h" => return Err(Self::usage()),
+                _ => return Err(format!("unknown argument '{arg}'\n\n{}", Self::usage())),
+            }
+        }
+
+        if sender.is_some() && accept_first_sender {
+            return Err("use either --sender or --accept-first-sender, not both".to_owned());
+        }
+
+        Ok(Self {
+            bind_addr,
+            timeout,
+            accept_first_sender,
+            sender,
+            print_packets,
+            no_vigem,
+        })
+    }
+
+    fn usage() -> String {
+        format!(
+            "Usage: ds-controller-pc [OPTIONS]\n\n\
+             Options:\n\
+               --bind <addr:port>       UDP listen address [default: {DEFAULT_BIND_ADDR}]\n\
+               --timeout-ms <ms>        Release-all timeout [default: {DEFAULT_TIMEOUT_MS}]\n\
+               --sender <addr:port>     Accept packets only from this sender\n\
+               --accept-first-sender    Lock to the first valid packet sender\n\
+               --print-packets          Print every accepted packet\n\
+               --no-vigem               Run network/protocol receiver without controller output\n\
+               -h, --help               Print help"
+        )
+    }
+}
+
+fn main() -> ExitCode {
+    let args = match Args::parse() {
+        Ok(args) => args,
+        Err(message) => {
+            eprintln!("{message}");
+            return ExitCode::from(2);
+        }
+    };
+
+    if !args.no_vigem {
+        eprintln!("ViGEm output is not implemented in this slice. Re-run with --no-vigem.");
+        return ExitCode::from(2);
+    }
+
+    println!("listening on {}", args.bind_addr);
+    println!("timeout: {} ms", args.timeout.as_millis());
+    println!("mode: no-vigem protocol receiver");
+
+    let config = ReceiverConfig {
+        bind_addr: args.bind_addr,
+        timeout: args.timeout,
+        fixed_sender: args.sender,
+        accept_first_sender: args.accept_first_sender,
+    };
+
+    let mut receiver = match Receiver::bind(config) {
+        Ok(receiver) => receiver,
+        Err(error) => {
+            eprintln!("failed to bind UDP receiver: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    loop {
+        match receiver.next_event() {
+            Ok(ReceiverEvent::State { sender, state }) => {
+                if args.print_packets {
+                    println!("{sender} seq={} buttons={}", state.sequence, state.buttons);
+                }
+            }
+            Ok(ReceiverEvent::Timeout) => {
+                println!("receiver timeout: release all inputs");
+            }
+            Err(error) => {
+                eprintln!("receiver error: {error}");
+            }
+        }
+    }
+}
