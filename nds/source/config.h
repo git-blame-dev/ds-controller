@@ -2,7 +2,7 @@
 #define DS_CONTROLLER_CONFIG_H
 
 #ifndef DS_CONTROLLER_PC_IP
-#define DS_CONTROLLER_PC_IP "192.168.1.100"
+#error "DS_CONTROLLER_PC_IP must be provided by the build system"
 #endif
 
 #ifndef DS_CONTROLLER_PC_PORT
