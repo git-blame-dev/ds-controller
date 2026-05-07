@@ -14,6 +14,8 @@ use receiver::{Receiver, ReceiverConfig, ReceiverEvent};
 
 const DEFAULT_BIND_ADDR: &str = "0.0.0.0:26760";
 const DEFAULT_TIMEOUT_MS: u64 = 150;
+#[cfg(windows)]
+const VIGEM_SETUP_URL: &str = "https://docs.nefarius.at/projects/ViGEm/How-to-Install/";
 
 #[derive(Debug)]
 struct Args {
@@ -211,14 +213,6 @@ fn main() -> ExitCode {
         }
     );
 
-    let mut backend = match create_backend(args.no_vigem) {
-        Ok(backend) => backend,
-        Err(error) => {
-            eprintln!("failed to initialize controller backend: {error}");
-            return ExitCode::FAILURE;
-        }
-    };
-
     let config = ReceiverConfig {
         bind_addr: args.bind_addr,
         timeout: args.timeout,
@@ -230,6 +224,15 @@ fn main() -> ExitCode {
         Ok(receiver) => receiver,
         Err(error) => {
             eprintln!("failed to bind UDP receiver: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut backend = match create_backend(args.no_vigem) {
+        Ok(backend) => backend,
+        Err(error) => {
+            eprintln!("failed to initialize controller backend: {error}");
+            offer_vigem_setup_help(args.no_vigem);
             return ExitCode::FAILURE;
         }
     };
@@ -262,3 +265,21 @@ fn main() -> ExitCode {
         }
     }
 }
+
+#[cfg(windows)]
+fn offer_vigem_setup_help(no_vigem: bool) {
+    if no_vigem {
+        return;
+    }
+
+    eprintln!();
+    eprintln!("ViGEmBus is required to create the virtual Xbox 360 controller.");
+    eprintln!(
+        "Install the Nefarius Virtual Gamepad Emulation Bus Driver, then run this app again."
+    );
+    eprintln!("Setup instructions: {VIGEM_SETUP_URL}");
+    eprintln!("Note: ViGEmBus is a retired third-party kernel driver. Review the publisher before installing.");
+}
+
+#[cfg(not(windows))]
+fn offer_vigem_setup_help(_no_vigem: bool) {}
