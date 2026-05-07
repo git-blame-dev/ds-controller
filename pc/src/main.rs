@@ -1,3 +1,4 @@
+mod backend;
 mod mapping;
 mod protocol;
 mod receiver;
@@ -7,6 +8,7 @@ use std::net::SocketAddr;
 use std::process::ExitCode;
 use std::time::Duration;
 
+use backend::create_backend;
 use mapping::map_ds_to_xbox;
 use receiver::{Receiver, ReceiverConfig, ReceiverEvent};
 
@@ -200,12 +202,22 @@ fn main() -> ExitCode {
 
     println!("listening on {}", args.bind_addr);
     println!("timeout: {} ms", args.timeout.as_millis());
-    if !args.no_vigem {
-        eprintln!("ViGEm output is not implemented in this slice. Re-run with --no-vigem.");
-        return ExitCode::from(2);
-    }
+    println!(
+        "mode: {}",
+        if args.no_vigem {
+            "no-vigem protocol receiver"
+        } else {
+            "ViGEm Xbox 360 output"
+        }
+    );
 
-    println!("mode: no-vigem protocol receiver");
+    let mut backend = match create_backend(args.no_vigem) {
+        Ok(backend) => backend,
+        Err(error) => {
+            eprintln!("failed to initialize controller backend: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
 
     let config = ReceiverConfig {
         bind_addr: args.bind_addr,
@@ -226,6 +238,9 @@ fn main() -> ExitCode {
         match receiver.next_event() {
             Ok(ReceiverEvent::State { sender, state }) => {
                 let output = map_ds_to_xbox(state);
+                if let Err(error) = backend.update(output) {
+                    eprintln!("controller update failed: {error}");
+                }
 
                 if args.print_packets {
                     println!(
@@ -235,6 +250,10 @@ fn main() -> ExitCode {
                 }
             }
             Ok(ReceiverEvent::Timeout) => {
+                if let Err(error) = backend.neutral() {
+                    eprintln!("neutral controller update failed: {error}");
+                }
+
                 println!("receiver timeout: release all inputs");
             }
             Err(error) => {
