@@ -23,6 +23,14 @@ struct Args {
 
 impl Args {
     fn parse() -> Result<Self, String> {
+        Self::parse_from(env::args().skip(1))
+    }
+
+    fn parse_from<I, S>(args: I) -> Result<Self, String>
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
         let mut bind_addr = DEFAULT_BIND_ADDR
             .parse::<SocketAddr>()
             .map_err(|error| format!("invalid default bind address: {error}"))?;
@@ -32,7 +40,7 @@ impl Args {
         let mut print_packets = false;
         let mut no_vigem = false;
 
-        let mut args = env::args().skip(1);
+        let mut args = args.into_iter().map(Into::into);
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--bind" => {
@@ -98,6 +106,87 @@ impl Args {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_default_args() {
+        let args = Args::parse_from([] as [&str; 0]).expect("default args");
+
+        assert_eq!(args.bind_addr, "0.0.0.0:26760".parse().unwrap());
+        assert_eq!(args.timeout, Duration::from_millis(150));
+        assert!(!args.accept_first_sender);
+        assert_eq!(args.sender, None);
+        assert!(!args.print_packets);
+        assert!(!args.no_vigem);
+    }
+
+    #[test]
+    fn parses_all_options() {
+        let args = Args::parse_from([
+            "--bind",
+            "127.0.0.1:3000",
+            "--timeout-ms",
+            "250",
+            "--sender",
+            "127.0.0.1:4000",
+            "--print-packets",
+            "--no-vigem",
+        ])
+        .expect("valid args");
+
+        assert_eq!(args.bind_addr, "127.0.0.1:3000".parse().unwrap());
+        assert_eq!(args.timeout, Duration::from_millis(250));
+        assert_eq!(args.sender, Some("127.0.0.1:4000".parse().unwrap()));
+        assert!(args.print_packets);
+        assert!(args.no_vigem);
+    }
+
+    #[test]
+    fn parses_accept_first_sender() {
+        let args = Args::parse_from(["--accept-first-sender"]).expect("valid args");
+
+        assert!(args.accept_first_sender);
+    }
+
+    #[test]
+    fn rejects_sender_with_accept_first_sender() {
+        let error = Args::parse_from(["--sender", "127.0.0.1:4000", "--accept-first-sender"])
+            .expect_err("conflicting args");
+
+        assert!(error.contains("use either --sender or --accept-first-sender"));
+    }
+
+    #[test]
+    fn rejects_missing_option_value() {
+        let error = Args::parse_from(["--bind"]).expect_err("missing value");
+
+        assert!(error.contains("--bind requires"));
+    }
+
+    #[test]
+    fn rejects_invalid_bind_address() {
+        let error = Args::parse_from(["--bind", "not-an-address"]).expect_err("invalid bind");
+
+        assert!(error.contains("invalid --bind value"));
+    }
+
+    #[test]
+    fn rejects_invalid_timeout() {
+        let error = Args::parse_from(["--timeout-ms", "nope"]).expect_err("invalid timeout");
+
+        assert!(error.contains("invalid --timeout-ms value"));
+    }
+
+    #[test]
+    fn rejects_unknown_arg() {
+        let error = Args::parse_from(["--bogus"]).expect_err("unknown arg");
+
+        assert!(error.contains("unknown argument"));
+    }
+}
+
 fn main() -> ExitCode {
     let args = match Args::parse() {
         Ok(args) => args,
@@ -107,13 +196,13 @@ fn main() -> ExitCode {
         }
     };
 
+    println!("listening on {}", args.bind_addr);
+    println!("timeout: {} ms", args.timeout.as_millis());
     if !args.no_vigem {
         eprintln!("ViGEm output is not implemented in this slice. Re-run with --no-vigem.");
         return ExitCode::from(2);
     }
 
-    println!("listening on {}", args.bind_addr);
-    println!("timeout: {} ms", args.timeout.as_millis());
     println!("mode: no-vigem protocol receiver");
 
     let config = ReceiverConfig {
