@@ -2,6 +2,9 @@
 
 TARGET := ds-controller
 BUILD := build
+ARM7_TARGET := ds-controller-arm7
+TOPDIR ?= $(CURDIR)
+ARM7_ELF ?= $(TOPDIR)/$(BUILD)/arm7/$(ARM7_TARGET).elf
 
 ifneq ($(filter test clean,$(MAKECMDGOALS)),)
 
@@ -24,13 +27,18 @@ endif
 
 include $(DEVKITARM)/ds_rules
 
+_ARM7_ELF := -7 $(ARM7_ELF)
+
 SOURCES := source
-INCLUDES := source
+INCLUDES := source common
 DATA :=
 GRAPHICS :=
 NITRO :=
-PC_IP ?= 192.168.1.100
 PC_PORT ?= 26760
+
+ifeq ($(strip $(PC_IP)),)
+$(error "Please set PC_IP. Example: make PC_IP=192.168.1.50 PC_PORT=26760")
+endif
 
 ARCH := -march=armv5te -mtune=arm946e-s
 
@@ -46,6 +54,8 @@ LIBDIRS := $(LIBNDS) $(PORTLIBS)
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 
 export OUTPUT := $(CURDIR)/$(BUILD)/$(TARGET)
+export TOPDIR := $(CURDIR)
+export ARM7_ELF := $(CURDIR)/$(BUILD)/arm7/$(ARM7_TARGET).elf
 export VPATH := $(foreach dir,$(SOURCES),$(CURDIR)/$(dir))
 export DEPSDIR := $(CURDIR)/$(BUILD)
 
@@ -72,13 +82,20 @@ export LIBPATHS := $(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 
 all: $(BUILD)
 
-$(BUILD):
+$(BUILD): $(ARM7_ELF)
 	@mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
 
+$(ARM7_ELF):
+	@$(MAKE) --no-print-directory -C $(TOPDIR)/arm7 TARGET=$(ARM7_TARGET)
+
 else
 
-$(OUTPUT).nds: $(OUTPUT).elf
+.PHONY: all
+
+all: $(OUTPUT).nds
+
+$(OUTPUT).nds: $(OUTPUT).elf $(ARM7_ELF)
 $(OUTPUT).elf: $(OFILES)
 
 $(OFILES_SOURCES): $(HFILES)
