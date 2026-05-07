@@ -1,0 +1,8 @@
+build.mk
+pc/target/
+target/
+nds/build/
+node_modules/
+pc/app/dist/
+pc/app/.vite/
+pc/app/src-tauri/gen/
