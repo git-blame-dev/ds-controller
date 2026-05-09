@@ -62,12 +62,7 @@ int ds_controller_network_init(ds_controller_network_t *network) {
 
         swiWaitForVBlank();
         scanKeys();
-        const uint32_t down = keysDown();
-        ds_controller_display_update(down);
-        if (down & KEY_START) {
-            network->last_error = -2;
-            return -1;
-        }
+        ds_controller_display_update(keysDown());
     }
 
     network->socket_fd = socket(AF_INET, SOCK_DGRAM, 0);

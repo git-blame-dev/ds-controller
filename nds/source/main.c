@@ -9,6 +9,8 @@
 #include "network.h"
 #include "protocol.h"
 
+#define RETRY_DELAY_FRAMES (60u * 2u)
+
 static void send_controller_packet(ds_controller_network_t *network, ds_controller_packet_t *packet,
                                    uint32_t *sequence) {
     const uint16_t buttons = ds_controller_buttons_from_keys(keysHeld());
@@ -36,17 +38,17 @@ static bool run_controller(void) {
     ds_controller_network_t network;
     if (ds_controller_network_init(&network) != 0) {
         iprintf("Wi-Fi failed: %d\n", network.last_error);
-        iprintf("Press Start to retry.\n");
-        while (pmMainLoop()) {
+        iprintf("Retrying...\n");
+        for (uint32_t frame = 0; frame < RETRY_DELAY_FRAMES; frame++) {
+            if (!pmMainLoop()) {
+                return false;
+            }
+
             swiWaitForVBlank();
             scanKeys();
-            const uint32_t down = keysDown();
-            ds_controller_display_update(down);
-            if (down & KEY_START) {
-                return true;
-            }
+            ds_controller_display_update(keysDown());
         }
-        return false;
+        return true;
     }
 
     print_status();
