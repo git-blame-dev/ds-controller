@@ -1,5 +1,7 @@
 # ds-controller
 
+[![CI](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml)
+
 Use a Nintendo DS or DS Lite as a wireless controller for Windows games.
 
 The DS homebrew app reads the built-in buttons and sends compact UDP controller-state packets over Wi-Fi. The Windows receiver is a Rust CLI app that maps those packets to a ViGEm virtual Xbox 360 controller, so games see normal XInput input.
