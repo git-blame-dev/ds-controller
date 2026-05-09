@@ -1,17 +1,20 @@
 .SUFFIXES:
 
 WINDOWS_TARGET := x86_64-pc-windows-msvc
+DEVKITARM_IMAGE ?= devkitpro/devkitarm:latest
+DOCKER_USER := $(shell id -u):$(shell id -g)
 PC_PORT ?= 26760
 
 -include build.mk
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all nds pc test pc-check clean check-pc-ip
+.PHONY: help all nds nds-local pc test pc-check clean check-pc-ip
 
 help:
 	@printf '%s\n' 'Targets:'
-	@printf '%s\n' '  make nds       Build the Nintendo DS ROM using PC_IP/PC_PORT from build.mk'
+	@printf '%s\n' '  make nds       Build the Nintendo DS ROM in Docker using PC_IP/PC_PORT from build.mk'
+	@printf '%s\n' '  make nds-local Build the Nintendo DS ROM with local devkitPro'
 	@printf '%s\n' '  make pc        Build the Windows receiver with cargo-xwin'
 	@printf '%s\n' '  make test      Run DS host tests and Rust tests'
 	@printf '%s\n' '  make pc-check  Run Rust fmt, tests, clippy, and Windows GNU check'
@@ -20,6 +23,12 @@ help:
 all: nds pc
 
 nds: check-pc-ip
+	docker run --rm --user $(DOCKER_USER) -e HOME=/tmp -v "$(CURDIR)":/workspace -w /workspace \
+		$(DEVKITARM_IMAGE) \
+		$(MAKE) nds-local PC_IP="$(PC_IP)" PC_PORT="$(PC_PORT)"
+	@printf 'NDS ROM: %s\n' "$(CURDIR)/nds/build/ds-controller.nds"
+
+nds-local: check-pc-ip
 	$(MAKE) -C nds clean
 	$(MAKE) -C nds PC_IP="$(PC_IP)" PC_PORT="$(PC_PORT)"
 	@printf 'NDS ROM: %s\n' "$(CURDIR)/nds/build/ds-controller.nds"
