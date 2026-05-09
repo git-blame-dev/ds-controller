@@ -54,6 +54,12 @@ static int backlight_thread_main(void *arg) {
     return 0;
 }
 
+static void disable_soft_reset_key_combo(void) {
+    // Calico defaults L+R+Start+Select to soft reset; this app sends those buttons as input.
+    irqDisable(IRQ_KEYPAD);
+    REG_KEYCNT = 0;
+}
+
 int main(void) {
     envReadNvramSettings();
     keypadStartExtServer();
@@ -65,6 +71,7 @@ int main(void) {
     rtcSyncTime();
 
     pmInit();
+    disable_soft_reset_key_combo();
 
     touchInit();
     touchStartServer(80, MAIN_THREAD_PRIO);
