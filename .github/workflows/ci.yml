@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  workflow-lint:
+    name: Workflow lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run actionlint
+        uses: rhysd/actionlint@v1
+
+  linux-deterministic-tests:
+    name: Linux deterministic tests
+    needs: workflow-lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          targets: x86_64-pc-windows-gnu
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pc -> target
+
+      - name: Run NDS host tests
+        run: make -C nds test
+
+      - name: Check Rust formatting
+        run: cargo fmt --manifest-path pc/Cargo.toml --check
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path pc/Cargo.toml --locked
+
+      - name: Run Rust lints
+        run: cargo clippy --manifest-path pc/Cargo.toml --locked -- -D warnings
+
+      - name: Check Windows GNU target
+        run: cargo check --manifest-path pc/Cargo.toml --locked --target x86_64-pc-windows-gnu
+
+  windows-rust-tests:
+    name: Windows Rust validation
+    needs: workflow-lint
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: pc -> target
+
+      - name: Run Rust tests on Windows
+        run: cargo test --manifest-path pc/Cargo.toml --locked
+
+      - name: Run Rust lints on Windows
+        run: cargo clippy --manifest-path pc/Cargo.toml --locked -- -D warnings
+
+  nds-rom-build:
+    name: NDS ROM build
+    needs: workflow-lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DEVKITARM_IMAGE: devkitpro/devkitarm:20260221@sha256:4debd5b33cf4361a557b6bf3be5ff823804868125ce1429912f1a4e773e7ac5d
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build NDS ROM
+        run: make nds DEVKITARM_IMAGE="$DEVKITARM_IMAGE" PC_IP=192.0.2.1 PC_PORT=26760
+
+      - name: Upload NDS ROM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ds-controller-nds
+          path: nds/build/ds-controller.nds
+          if-no-files-found: error
