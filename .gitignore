@@ -1,4 +1,5 @@
 notes/
+tasks/
 build.mk
 pc/target/
 nds/build/
