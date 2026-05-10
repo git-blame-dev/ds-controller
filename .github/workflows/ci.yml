@@ -39,7 +39,6 @@ jobs:
 
   linux-deterministic-tests:
     name: Linux deterministic tests
-    needs: workflow-lint
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
@@ -75,7 +74,6 @@ jobs:
 
   windows-rust-tests:
     name: Windows Rust validation
-    needs: workflow-lint
     runs-on: windows-latest
     timeout-minutes: 15
 
@@ -101,7 +99,6 @@ jobs:
 
   nds-rom-build:
     name: NDS ROM build
-    needs: workflow-lint
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
