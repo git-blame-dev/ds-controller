@@ -1,0 +1,13 @@
+[package]
+name = "ds-controller-receiver"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ds_controller_receiver"
+path = "src/lib.rs"
+
+[dependencies]
+
+[target.'cfg(windows)'.dependencies]
+vigem-client = "0.1.4"

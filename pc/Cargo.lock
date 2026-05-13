@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "ds-controller-pc"
+name = "ds-controller-receiver"
 version = "0.1.0"
 dependencies = [
  "vigem-client",
