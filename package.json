@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "packageManager": "pnpm@10.15.1",
+  "scripts": {
+    "dev": "pnpm --dir pc/app tauri dev",
+    "build": "pnpm --dir pc/app tauri build",
+    "frontend:dev": "pnpm --dir pc/app dev",
+    "frontend:build": "pnpm --dir pc/app build",
+    "frontend:lint": "pnpm --dir pc/app lint",
+    "frontend:test": "pnpm --dir pc/app test",
+    "frontend:typecheck": "pnpm --dir pc/app typecheck",
+    "tauri": "pnpm --dir pc/app tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.4"
+  }
+}
