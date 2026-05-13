@@ -55,22 +55,47 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: pc -> target
+          workspaces: |
+            pc/receiver -> target
+            pc/app/src-tauri -> target
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Run NDS host tests
         run: make -C nds test
 
       - name: Check Rust formatting
-        run: cargo fmt --manifest-path pc/Cargo.toml --check
+        run: cargo fmt --all --check
 
       - name: Run Rust tests
-        run: cargo test --manifest-path pc/Cargo.toml --locked
+        run: cargo test --manifest-path pc/Cargo.toml --locked -p ds-controller-receiver
 
       - name: Run Rust lints
-        run: cargo clippy --manifest-path pc/Cargo.toml --locked -- -D warnings
+        run: cargo clippy --manifest-path pc/Cargo.toml --locked -p ds-controller-receiver -- -D warnings
 
       - name: Check Windows GNU target
-        run: cargo check --manifest-path pc/Cargo.toml --locked --target x86_64-pc-windows-gnu
+        run: cargo check --manifest-path pc/Cargo.toml --locked -p ds-controller-receiver --target x86_64-pc-windows-gnu
+
+      - name: Run frontend lint
+        run: pnpm --dir pc/app lint
+
+      - name: Run frontend tests
+        run: pnpm --dir pc/app test
+
+      - name: Build frontend
+        run: pnpm --dir pc/app build
 
   windows-rust-tests:
     name: Windows Rust validation
@@ -89,13 +114,41 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: pc -> target
+          workspaces: |
+            pc/receiver -> target
+            pc/app/src-tauri -> target
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Run Rust tests on Windows
         run: cargo test --manifest-path pc/Cargo.toml --locked
 
       - name: Run Rust lints on Windows
         run: cargo clippy --manifest-path pc/Cargo.toml --locked -- -D warnings
+
+      - name: Build Tauri app on Windows
+        run: pnpm --dir pc/app tauri build
+
+      - name: Upload Windows app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ds-controller-pc-app
+          path: |
+            pc/target/release/bundle/**/*.msi
+            pc/target/release/bundle/**/*.exe
+          if-no-files-found: error
 
   nds-rom-build:
     name: NDS ROM build
