@@ -364,6 +364,7 @@ fn button_names(state: ControllerState) -> Vec<String> {
 
     buttons
         .into_iter()
-        .filter_map(|(button, name)| state.buttons.contains(button).then(|| name.to_owned()))
+        .filter(|(button, _name)| state.buttons.contains(*button))
+        .map(|(_button, name)| name.to_owned())
         .collect()
 }

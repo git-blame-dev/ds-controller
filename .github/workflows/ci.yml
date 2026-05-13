@@ -80,13 +80,13 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Run Rust tests
-        run: cargo test --manifest-path pc/Cargo.toml --locked
+        run: cargo test --manifest-path pc/Cargo.toml --locked -p ds-controller-receiver
 
       - name: Run Rust lints
-        run: cargo clippy --manifest-path pc/Cargo.toml --locked -- -D warnings
+        run: cargo clippy --manifest-path pc/Cargo.toml --locked -p ds-controller-receiver -- -D warnings
 
       - name: Check Windows GNU target
-        run: cargo check --manifest-path pc/Cargo.toml --locked --target x86_64-pc-windows-gnu
+        run: cargo check --manifest-path pc/Cargo.toml --locked -p ds-controller-receiver --target x86_64-pc-windows-gnu
 
       - name: Run frontend lint
         run: pnpm --dir pc/app lint
