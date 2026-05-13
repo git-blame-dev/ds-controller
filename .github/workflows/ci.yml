@@ -146,8 +146,8 @@ jobs:
         with:
           name: ds-controller-pc-app
           path: |
-            target/release/bundle/**/*.msi
-            target/release/bundle/**/*.exe
+            pc/target/release/bundle/**/*.msi
+            pc/target/release/bundle/**/*.exe
           if-no-files-found: error
 
   nds-rom-build:
