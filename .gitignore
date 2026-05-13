@@ -2,4 +2,10 @@ notes/
 tasks/
 build.mk
 pc/target/
+target/
 nds/build/
+.opencode-autopilot/
+node_modules/
+pc/app/dist/
+pc/app/.vite/
+pc/app/src-tauri/gen/
