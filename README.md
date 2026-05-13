@@ -4,7 +4,13 @@
 
 Use a Nintendo DS or DS Lite as a wireless controller for Windows games.
 
-The DS homebrew app reads the built-in buttons and sends compact UDP controller-state packets over Wi-Fi. The Windows receiver is a Rust CLI app that maps those packets to a ViGEm virtual Xbox 360 controller, so games see normal XInput input.
+The DS homebrew app reads the built-in buttons and sends compact UDP controller-state packets over Wi-Fi. The Windows PC app is a dark Tauri desktop GUI that maps those packets to a ViGEm virtual Xbox 360 controller, so games see normal XInput input.
+
+## PC app preview
+
+The new PC app is a single-window dark dashboard for receiver status, ViGEm status, port configuration, start/stop controls, packet debugging, and logs.
+
+GIF placeholder: `docs/media/app-listening.gif`
 
 ## Architecture
 
@@ -13,7 +19,7 @@ Nintendo DS / DS Lite
   buttons -> UDP packets at 60 Hz
         |
         v
-Windows receiver
+Windows PC app
   parse -> filter -> timeout -> Xbox 360 output
         |
         v
@@ -37,7 +43,9 @@ Configure the Wi-Fi profile first from a Nintendo WFC-compatible DS game, such a
 ### Build
 
 - Rust toolchain
-- `cargo-xwin` for building the Windows receiver from Linux: `cargo install cargo-xwin --locked`
+- Node.js and pnpm for the Tauri GUI frontend
+- Tauri 2 system prerequisites for Windows app builds
+- `cargo-xwin` or native Windows tooling for Windows Rust validation
 - devkitPro with devkitARM, libnds, and dswifi for building the DS sender
 - Docker with `devkitpro/devkitarm:latest` if you prefer building the DS sender without installing devkitPro locally
 
@@ -72,7 +80,7 @@ If devkitPro is not installed locally, build with Docker:
 docker run --rm -v "$PWD":/work -w /work devkitpro/devkitarm:latest make nds
 ```
 
-Build the Windows receiver:
+Build the Windows PC GUI app:
 
 ```sh
 make pc
@@ -81,15 +89,11 @@ make pc
 Artifacts:
 
 - `nds/build/ds-controller.nds`
-- `pc/target/x86_64-pc-windows-msvc/release/ds-controller-pc.exe`
+- Windows installer/bundle under `target/x86_64-pc-windows-msvc/release/bundle/`
 
 ## Run
 
-Start the Windows receiver first:
-
-```sh
-ds-controller-pc --bind 0.0.0.0:26760 --accept-first-sender
-```
+Open **DS Controller** on the Windows PC. The receiver starts automatically when **Start receiver when app opens** is enabled. You can change the UDP port, use **Apply & Restart**, and view receiver logs in the app.
 
 Then launch `nds/build/ds-controller.nds` on the DS.
 
@@ -103,11 +107,19 @@ Run all deterministic tests:
 make test
 ```
 
-Run Rust formatting, tests, linting, and the Windows GNU target check:
+Run the PC GUI in development mode:
+
+```sh
+make app-dev
+```
+
+Run Rust formatting, receiver tests, receiver linting, the Windows GNU receiver check, and frontend checks:
 
 ```sh
 make pc-check
 ```
+
+The Tauri app has additional platform prerequisites. If Linux Tauri checks fail because system GUI libraries such as `pkg-config`, `dbus`, or WebKitGTK are missing, install the Tauri Linux prerequisites or validate the GUI build on Windows.
 
 The DS host tests cover packet encoding, input mapping, and display wake policy. Hardware behavior such as Wi-Fi association and backlight control still requires a real DS or DS Lite.
 
@@ -116,3 +128,11 @@ The DS host tests cover packet encoding, input mapping, and display wake policy.
 - Buttons only; touchscreen input is used only to wake the status screen.
 - DS / DS Lite Wi-Fi requires open or WEP-era 2.4 GHz networking.
 - ViGEmBus is required for virtual Xbox 360 output on Windows.
+
+## Troubleshooting
+
+- **ViGEm error:** install ViGEmBus, then restart DS Controller.
+- **Port already in use:** choose a different port in the app and click **Apply & Restart**.
+- **No packets received:** confirm the DS ROM was built with the PC LAN IP and the same UDP port shown in the app.
+- **Firewall prompt:** allow DS Controller to receive UDP traffic on the selected port.
+- **DS Wi-Fi issue:** DS / DS Lite requires open or WEP-era 2.4 GHz Wi-Fi.

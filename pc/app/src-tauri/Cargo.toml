@@ -1,0 +1,17 @@
+[package]
+name = "ds-controller-app"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ds_controller_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = "2"
+
+[dependencies]
+ds-controller-receiver = { path = "../../receiver" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = "2"

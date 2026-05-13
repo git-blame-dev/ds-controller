@@ -1,9 +1,3 @@
-[package]
-name = "ds-controller-pc"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-
-[target.'cfg(windows)'.dependencies]
-vigem-client = "0.1.4"
+[workspace]
+members = ["receiver", "app/src-tauri"]
+resolver = "2"
