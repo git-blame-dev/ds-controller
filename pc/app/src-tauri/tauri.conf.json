@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DS Controller",
+"version": "0.1.0",
+"identifier": "dev.gitblame.ds-controller",
+"build": {
+"beforeDevCommand": "pnpm dev",
+"beforeBuildCommand": "pnpm build",
+"devUrl": "http://localhost:5173",
+"frontendDist": "../dist"
+},
+"app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "DS Controller",
+        "width": 1120,
+        "height": 760,
+        "minWidth": 900,
+        "minHeight": 640,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+"bundle": {
+"active": true,
+"targets": "all"
+}
+}
