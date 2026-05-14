@@ -15,7 +15,7 @@ help:
 	@printf '%s\n' 'Targets:'
 	@printf '%s\n' '  make nds       Build the Nintendo DS ROM in Docker using PC_IP/PC_PORT from build.mk'
 	@printf '%s\n' '  make nds-local Build the Nintendo DS ROM with local devkitPro'
-	@printf '%s\n' '  make pc        Build the Windows Tauri GUI app bundle'
+	@printf '%s\n' '  make pc        Build the portable Windows Tauri GUI app'
 	@printf '%s\n' '  make app-dev   Run the Tauri GUI app in development mode'
 	@printf '%s\n' '  make test      Run DS host tests, receiver Rust tests, and frontend build'
 	@printf '%s\n' '  make pc-check  Run receiver Rust checks and frontend checks'
@@ -35,8 +35,8 @@ nds-local: check-pc-ip
 	@printf 'NDS ROM: %s\n' "$(CURDIR)/nds/build/ds-controller.nds"
 
 pc:
-	pnpm --dir pc/app tauri build --target $(WINDOWS_TARGET)
-	@printf 'Windows GUI app bundle: %s\n' "$(CURDIR)/target/$(WINDOWS_TARGET)/release/bundle"
+	pnpm --dir pc/app tauri build --target $(WINDOWS_TARGET) --no-bundle
+	@printf 'Windows GUI app: %s\n' "$(CURDIR)/pc/target/$(WINDOWS_TARGET)/release/ds-controller.exe"
 
 app-dev:
 	pnpm --dir pc/app tauri dev
