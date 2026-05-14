@@ -1,7 +1,7 @@
 .SUFFIXES:
 
 WINDOWS_TARGET := x86_64-pc-windows-msvc
-DEVKITARM_IMAGE ?= devkitpro/devkitarm:latest
+DEVKITARM_IMAGE ?= devkitpro/devkitarm:20260221@sha256:4debd5b33cf4361a557b6bf3be5ff823804868125ce1429912f1a4e773e7ac5d
 DOCKER_USER := $(shell id -u):$(shell id -g)
 PC_PORT ?= 26760
 
