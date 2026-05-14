@@ -7,13 +7,15 @@ PC_PORT ?= 26760
 
 -include build.mk
 
+PC_IP ?= 192.0.2.1
+
 .DEFAULT_GOAL := help
 
-.PHONY: help all nds nds-local pc app-dev frontend-check test pc-check clean check-pc-ip
+.PHONY: help all nds nds-local pc app-dev frontend-check test pc-check clean
 
 help:
 	@printf '%s\n' 'Targets:'
-	@printf '%s\n' '  make nds       Build the Nintendo DS ROM in Docker using PC_IP/PC_PORT from build.mk'
+	@printf '%s\n' '  make nds       Build the Nintendo DS ROM in Docker; PC_IP/PC_PORT from build.mk are optional defaults'
 	@printf '%s\n' '  make nds-local Build the Nintendo DS ROM with local devkitPro'
 	@printf '%s\n' '  make pc        Build the portable Windows Tauri GUI app'
 	@printf '%s\n' '  make app-dev   Run the Tauri GUI app in development mode'
@@ -23,13 +25,13 @@ help:
 
 all: nds pc
 
-nds: check-pc-ip
+nds:
 	docker run --rm --user $(DOCKER_USER) -e HOME=/tmp -v "$(CURDIR)":/workspace -w /workspace \
 	$(DEVKITARM_IMAGE) \
 	$(MAKE) nds-local PC_IP="$(PC_IP)" PC_PORT="$(PC_PORT)"
 	@printf 'NDS ROM: %s\n' "$(CURDIR)/nds/build/ds-controller.nds"
 
-nds-local: check-pc-ip
+nds-local:
 	$(MAKE) -C nds clean
 	$(MAKE) -C nds PC_IP="$(PC_IP)" PC_PORT="$(PC_PORT)"
 	@printf 'NDS ROM: %s\n' "$(CURDIR)/nds/build/ds-controller.nds"
@@ -61,10 +63,3 @@ pc-check:
 clean:
 	$(MAKE) -C nds clean
 	cargo clean
-
-check-pc-ip:
-	@if [ -z "$(PC_IP)" ]; then \
-		printf '%s\n' 'PC_IP is required for NDS builds.'; \
-		printf '%s\n' 'Copy build.example.mk to ignored build.mk, then set PC_IP=<windows-pc-lan-ip>.'; \
-		exit 1; \
-	fi

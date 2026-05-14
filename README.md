@@ -49,6 +49,19 @@ Configure the Wi-Fi profile first from a Nintendo WFC-compatible DS game, such a
 
 ## Configuration
 
+The DS ROM can read a `ds-controller.ini` file from these flashcart paths:
+
+- `ds-controller.ini`
+- `/ds-controller.ini`
+- `/ds-controller/ds-controller.ini`
+
+```ini
+pc_ip=192.168.1.50
+pc_port=26760
+```
+
+Use `nds/ds-controller.example.ini` as a starting point. If no config file is found, the ROM uses the build-time defaults.
+
 Copy the example build config and set the Windows PC LAN address:
 
 ```sh
@@ -62,7 +75,7 @@ PC_IP := 192.168.1.50
 PC_PORT := 26760
 ```
 
-`build.mk` is ignored by Git because it is local network configuration.
+`build.mk` is ignored by Git because it is local network configuration. It is optional when using `ds-controller.ini`.
 
 ## Build
 
