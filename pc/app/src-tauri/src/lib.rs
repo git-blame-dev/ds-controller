@@ -38,6 +38,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
             commands::save_settings,
+            commands::set_packet_logging_enabled,
             commands::get_runtime_status,
             commands::start_receiver,
             commands::stop_receiver,
