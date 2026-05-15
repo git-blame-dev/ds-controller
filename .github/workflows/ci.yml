@@ -37,20 +37,22 @@ jobs:
       - name: Run actionlint
         run: ./actionlint
 
-  linux-deterministic-tests:
-    name: Linux deterministic tests
+  linux-build-test-package:
+    name: Linux build, test, and package
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Install Linux Windows cross-build tools
+        run: sudo apt-get update && sudo apt-get install -y clang lld llvm
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
-          targets: x86_64-pc-windows-gnu
+          targets: x86_64-pc-windows-msvc
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -59,6 +61,9 @@ jobs:
           workspaces: |
             pc/receiver -> target
             pc/app/src-tauri -> target
+
+      - name: Install cargo-xwin
+        run: cargo install cargo-xwin --locked
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -75,90 +80,26 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Run NDS host tests
-        run: make -C nds test
+      - name: Run deterministic tests
+        run: make test
 
-      - name: Check Rust formatting
-        run: cargo fmt --all --check
-
-      - name: Run Rust tests
-        run: cargo test --manifest-path pc/Cargo.toml --locked -p ds-controller-receiver
-
-      - name: Run Rust lints
-        run: cargo clippy --manifest-path pc/Cargo.toml --locked -p ds-controller-receiver -- -D warnings
-
-      - name: Check Windows GNU target
-        run: cargo check --manifest-path pc/Cargo.toml --locked -p ds-controller-receiver --target x86_64-pc-windows-gnu
-
-      - name: Run frontend lint
-        run: pnpm --dir pc/app lint
-
-      - name: Run frontend tests
-        run: pnpm --dir pc/app test
-
-      - name: Build frontend
-        run: pnpm --dir pc/app build
-
-  windows-rust-tests:
-    name: Windows Rust validation
-    runs-on: windows-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: rust-${{ runner.os }}
-          workspaces: |
-            pc/receiver -> target
-            pc/app/src-tauri -> target
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.15.1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      - name: Run Rust tests on Windows
-        run: cargo test --manifest-path pc/Cargo.toml --locked
-
-      - name: Run Rust lints on Windows
-        run: cargo clippy --manifest-path pc/Cargo.toml --locked -- -D warnings
-
-      - name: Build Tauri portable app on Windows
-        run: pnpm --dir pc/app tauri build --no-bundle
+      - name: Cross-build Windows portable app
+        run: make pc
 
       - name: Stage Windows release files
-        shell: pwsh
+        shell: bash
         run: |
-          New-Item -ItemType Directory -Force -Path dist/pc | Out-Null
-          Copy-Item pc/target/release/ds-controller.exe dist/pc/ds-controller.exe
+          mkdir -p dist/pc
+          cp pc/target/x86_64-pc-windows-msvc/release/ds-controller.exe dist/pc/ds-controller.exe
 
-          $webViewLoader = Get-ChildItem pc/target/release/build/webview2-com-sys-*/out/x64/WebView2Loader.dll |
-            Select-Object -First 1
-          if (-not $webViewLoader) {
-            Write-Error "WebView2Loader.dll was not produced by webview2-com-sys"
-          }
-          Copy-Item $webViewLoader.FullName dist/pc/WebView2Loader.dll
+          web_view_loaders=(pc/target/x86_64-pc-windows-msvc/release/build/webview2-com-sys-*/out/x64/WebView2Loader.dll)
+          if [ ! -e "${web_view_loaders[0]}" ]; then
+            printf '%s\n' 'WebView2Loader.dll was not produced by webview2-com-sys' >&2
+            exit 1
+          fi
+          cp "${web_view_loaders[0]}" dist/pc/WebView2Loader.dll
 
-          Get-ChildItem dist/pc | Select-Object Name, Length
+          ls -l dist/pc
 
       - name: Upload Windows portable app
         uses: actions/upload-artifact@v4
