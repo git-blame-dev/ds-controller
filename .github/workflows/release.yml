@@ -145,22 +145,22 @@ jobs:
             fi
 
             printf '\n## Artifacts\n\n'
-            printf -- '- Windows app: `pc/ds-controller.exe`\n'
-            printf -- '- WebView2 loader: `pc/WebView2Loader.dll`\n'
-            printf -- '- Nintendo DS ROM: `nds/ds-controller.nds`\n'
-            printf -- '- DS config example: `nds/ds-controller.ini`\n'
+            printf -- "- Windows app: \`pc/ds-controller.exe\`\n"
+            printf -- "- WebView2 loader: \`pc/WebView2Loader.dll\`\n"
+            printf -- "- Nintendo DS ROM: \`nds/ds-controller.nds\`\n"
+            printf -- "- DS config example: \`nds/ds-controller.ini\`\n"
 
             printf '\n## Verification\n\n'
-            printf -- '- `make test`\n'
-            printf -- '- `make pc`\n'
-            printf -- '- `make nds`\n'
+            printf -- "- \`make test\`\n"
+            printf -- "- \`make pc\`\n"
+            printf -- "- \`make nds\`\n"
 
             printf '\n## Full changelog\n\n'
 
             if [ -n "$compare_url" ]; then
               printf '%s\n' "$compare_url"
             else
-              printf 'Initial release from `%s`.\n' "$TARGET_SHA"
+              printf 'Initial release from %s.\n' "$TARGET_SHA"
             fi
           } > release-notes.md
 
