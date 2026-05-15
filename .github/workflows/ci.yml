@@ -55,6 +55,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          shared-key: rust-${{ runner.os }}
           workspaces: |
             pc/receiver -> target
             pc/app/src-tauri -> target
@@ -69,9 +70,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run NDS host tests
         run: make -C nds test
@@ -114,6 +116,7 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
+          shared-key: rust-${{ runner.os }}
           workspaces: |
             pc/receiver -> target
             pc/app/src-tauri -> target
@@ -128,9 +131,10 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run Rust tests on Windows
         run: cargo test --manifest-path pc/Cargo.toml --locked
@@ -149,6 +153,8 @@ jobs:
             pc/target/release/ds-controller.exe
             pc/target/release/WebView2Loader.dll
           if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
 
   nds-rom-build:
     name: NDS ROM build
@@ -164,9 +170,17 @@ jobs:
       - name: Build NDS ROM
         run: make nds DEVKITARM_IMAGE="$DEVKITARM_IMAGE" PC_IP=192.0.2.1 PC_PORT=26760
 
-      - name: Upload NDS ROM artifact
+      - name: Stage NDS release files
+        run: |
+          mkdir -p dist/nds
+          cp nds/build/ds-controller.nds dist/nds/ds-controller.nds
+          cp nds/ds-controller.ini dist/nds/ds-controller.ini
+
+      - name: Upload NDS release files
         uses: actions/upload-artifact@v4
         with:
           name: ds-controller-nds
-          path: nds/build/ds-controller.nds
+          path: dist/nds
           if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
