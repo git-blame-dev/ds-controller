@@ -6,11 +6,9 @@ Use a Nintendo DS or DS Lite as a wireless controller for Windows games.
 
 The DS homebrew app reads the built-in buttons and sends compact UDP controller-state packets over Wi-Fi. The Windows PC app is a dark Tauri desktop GUI that maps those packets to a ViGEm virtual Xbox 360 controller, so games see normal XInput input.
 
-## PC app preview
+## PC app
 
-The new PC app is a single-window dark dashboard for receiver status, ViGEm status, port configuration, start/stop controls, packet debugging, and logs.
-
-GIF placeholder: `docs/media/app-listening.gif`
+The PC app is a portable single-window dark dashboard for receiver status, ViGEm status, port configuration, start/stop controls, packet debugging, and logs.
 
 ## Architecture
 
@@ -51,6 +49,19 @@ Configure the Wi-Fi profile first from a Nintendo WFC-compatible DS game, such a
 
 ## Configuration
 
+The DS ROM can read a `ds-controller.ini` file from these flashcart paths:
+
+- `ds-controller.ini`
+- `/ds-controller.ini`
+- `/ds-controller/ds-controller.ini`
+
+```ini
+pc_ip=192.168.1.50
+pc_port=26760
+```
+
+Use `nds/ds-controller.example.ini` as a starting point. If no config file is found, the ROM uses the build-time defaults.
+
 Copy the example build config and set the Windows PC LAN address:
 
 ```sh
@@ -64,7 +75,7 @@ PC_IP := 192.168.1.50
 PC_PORT := 26760
 ```
 
-`build.mk` is ignored by Git because it is local network configuration.
+`build.mk` is ignored by Git because it is local network configuration. It is optional when using `ds-controller.ini`.
 
 ## Build
 
@@ -89,11 +100,13 @@ make pc
 Artifacts:
 
 - `nds/build/ds-controller.nds`
-- Windows installer/bundle under `target/x86_64-pc-windows-msvc/release/bundle/`
+- Portable Windows app files under `pc/target/x86_64-pc-windows-msvc/release/`:
+  - `ds-controller.exe`
+  - `WebView2Loader.dll`
 
 ## Run
 
-Open **DS Controller** on the Windows PC. The receiver starts automatically when **Start receiver when app opens** is enabled. You can change the UDP port, use **Apply & Restart**, and view receiver logs in the app.
+Copy `ds-controller.exe` and `WebView2Loader.dll` to the same folder on the Windows PC, then run `ds-controller.exe`. The receiver starts automatically when **Start receiver when app opens** is enabled. You can change the UDP port, use **Apply & Restart**, and view receiver logs in the app.
 
 Then launch `nds/build/ds-controller.nds` on the DS.
 

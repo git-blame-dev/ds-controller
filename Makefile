@@ -1,21 +1,23 @@
 .SUFFIXES:
 
 WINDOWS_TARGET := x86_64-pc-windows-msvc
-DEVKITARM_IMAGE ?= devkitpro/devkitarm:latest
+DEVKITARM_IMAGE ?= devkitpro/devkitarm:20260221@sha256:4debd5b33cf4361a557b6bf3be5ff823804868125ce1429912f1a4e773e7ac5d
 DOCKER_USER := $(shell id -u):$(shell id -g)
 PC_PORT ?= 26760
 
 -include build.mk
 
+PC_IP ?= 192.0.2.1
+
 .DEFAULT_GOAL := help
 
-.PHONY: help all nds nds-local pc app-dev frontend-check test pc-check clean check-pc-ip
+.PHONY: help all nds nds-local pc app-dev frontend-check test pc-check clean
 
 help:
 	@printf '%s\n' 'Targets:'
-	@printf '%s\n' '  make nds       Build the Nintendo DS ROM in Docker using PC_IP/PC_PORT from build.mk'
+	@printf '%s\n' '  make nds       Build the Nintendo DS ROM in Docker; PC_IP/PC_PORT from build.mk are optional defaults'
 	@printf '%s\n' '  make nds-local Build the Nintendo DS ROM with local devkitPro'
-	@printf '%s\n' '  make pc        Build the Windows Tauri GUI app bundle'
+	@printf '%s\n' '  make pc        Build the portable Windows Tauri GUI app'
 	@printf '%s\n' '  make app-dev   Run the Tauri GUI app in development mode'
 	@printf '%s\n' '  make test      Run DS host tests, receiver Rust tests, and frontend build'
 	@printf '%s\n' '  make pc-check  Run receiver Rust checks and frontend checks'
@@ -23,20 +25,20 @@ help:
 
 all: nds pc
 
-nds: check-pc-ip
+nds:
 	docker run --rm --user $(DOCKER_USER) -e HOME=/tmp -v "$(CURDIR)":/workspace -w /workspace \
 	$(DEVKITARM_IMAGE) \
 	$(MAKE) nds-local PC_IP="$(PC_IP)" PC_PORT="$(PC_PORT)"
 	@printf 'NDS ROM: %s\n' "$(CURDIR)/nds/build/ds-controller.nds"
 
-nds-local: check-pc-ip
+nds-local:
 	$(MAKE) -C nds clean
 	$(MAKE) -C nds PC_IP="$(PC_IP)" PC_PORT="$(PC_PORT)"
 	@printf 'NDS ROM: %s\n' "$(CURDIR)/nds/build/ds-controller.nds"
 
 pc:
-	pnpm --dir pc/app tauri build --target $(WINDOWS_TARGET)
-	@printf 'Windows GUI app bundle: %s\n' "$(CURDIR)/target/$(WINDOWS_TARGET)/release/bundle"
+	pnpm --dir pc/app tauri build --target $(WINDOWS_TARGET) --no-bundle
+	@printf 'Windows GUI app: %s\n' "$(CURDIR)/pc/target/$(WINDOWS_TARGET)/release/ds-controller.exe"
 
 app-dev:
 	pnpm --dir pc/app tauri dev
@@ -61,10 +63,3 @@ pc-check:
 clean:
 	$(MAKE) -C nds clean
 	cargo clean
-
-check-pc-ip:
-	@if [ -z "$(PC_IP)" ]; then \
-		printf '%s\n' 'PC_IP is required for NDS builds.'; \
-		printf '%s\n' 'Copy build.example.mk to ignored build.mk, then set PC_IP=<windows-pc-lan-ip>.'; \
-		exit 1; \
-	fi
