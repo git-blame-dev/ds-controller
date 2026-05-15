@@ -90,18 +90,36 @@ If devkitPro is not installed locally, build with Docker:
 
 The default `make nds` target uses Docker with the same pinned devkitARM image as CI.
 
-Build the Windows PC GUI app:
+Cross-build the Windows PC GUI app from Linux:
 
 ```sh
 make pc
 ```
 
+`make pc` requires LLVM tools, `cargo-xwin`, and the Windows MSVC Rust target:
+
+```sh
+rustup target add x86_64-pc-windows-msvc
+cargo install cargo-xwin
+```
+
+Install LLVM tools with one of:
+
+```sh
+# Ubuntu / WSL
+sudo apt install clang lld llvm
+
+# CachyOS / Arch
+sudo pacman -S --needed clang lld llvm
+```
+
 Artifacts:
 
 - `nds/build/ds-controller.nds`
-- Portable Windows app files under `pc/target/x86_64-pc-windows-msvc/release/`:
-  - `ds-controller.exe`
-  - `WebView2Loader.dll`
+- Windows executable: `pc/target/x86_64-pc-windows-msvc/release/ds-controller.exe`
+- WebView2 loader DLL for manual Windows testing: `pc/target/x86_64-pc-windows-msvc/release/build/webview2-com-sys-*/out/x64/WebView2Loader.dll`
+
+When testing manually on Windows, copy `ds-controller.exe` and `WebView2Loader.dll` into the same folder. CI runs the same Linux-first `make test` / `make pc` workflow and stages both files in the `ds-controller-pc-app` artifact.
 
 GitHub Releases publish one complete zip containing the Windows app files, NDS ROM, and `ds-controller.ini`.
 
@@ -127,13 +145,7 @@ Run the PC GUI in development mode:
 make app-dev
 ```
 
-Run Rust formatting, receiver tests, receiver linting, the Windows GNU receiver check, and frontend checks:
-
-```sh
-make pc-check
-```
-
-The Tauri app has additional platform prerequisites. If Linux Tauri checks fail because system GUI libraries such as `pkg-config`, `dbus`, or WebKitGTK are missing, install the Tauri Linux prerequisites or validate the GUI build on Windows.
+Lean local workflow: `make test` validates the code; `make pc` produces the Windows executable.
 
 The DS host tests cover packet encoding, input mapping, and display wake policy. Hardware behavior such as Wi-Fi association and backlight control still requires a real DS or DS Lite.
 
