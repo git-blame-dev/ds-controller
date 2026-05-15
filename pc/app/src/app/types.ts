@@ -52,6 +52,7 @@ export type AppAction =
   | { readonly type: "settingsLoaded"; readonly settings: AppSettings }
   | { readonly type: "draftSettingsChanged"; readonly settings: Partial<AppSettings> }
   | { readonly type: "settingsSaved"; readonly settings: AppSettings }
+  | { readonly type: "packetLoggingSaved"; readonly enabled: boolean }
   | { readonly type: "runtimeStatusReceived"; readonly runtimeStatus: RuntimeStatus }
   | { readonly type: "pressedButtonsReceived"; readonly pressedButtons: readonly DsButton[] }
   | { readonly type: "logReceived"; readonly entry: LogEntry }

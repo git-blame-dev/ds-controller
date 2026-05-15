@@ -1,7 +1,7 @@
 import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event"
 
-import type { AppSettings, DsButton, LogEntry, RuntimeStatus } from "./types"
-import { isAppSettings, isDsButtonArray, isLogEntry, isRuntimeStatus } from "./validation"
+import type { AppSettings, DsButton, LogEntry, RuntimeStatus, ValidationResult } from "./types"
+import { isAppSettings, isDsButtonArray, isLogEntry, parseRuntimeStatus } from "./validation"
 
 export const TAURI_EVENT_NAMES = Object.freeze({
 settingsChanged: "settings://changed",
@@ -15,7 +15,7 @@ export function listenToSettingsChanged(handler: (settings: AppSettings) => void
 }
 
 export function listenToRuntimeStatusChanged(handler: (runtimeStatus: RuntimeStatus) => void): Promise<UnlistenFn> {
-  return listenToValidatedEvent(TAURI_EVENT_NAMES.runtimeStatusChanged, isRuntimeStatus, handler)
+return listenToParsedEvent(TAURI_EVENT_NAMES.runtimeStatusChanged, parseRuntimeStatus, handler)
 }
 
 export function listenToLogEntry(handler: (entry: LogEntry) => void): Promise<UnlistenFn> {
@@ -36,6 +36,21 @@ function listenToValidatedEvent<TPayload>(
       throw new Error(`${eventName} emitted an invalid payload.`)
     }
 
-    handler(event.payload)
-  })
+handler(event.payload)
+})
+}
+
+function listenToParsedEvent<TPayload>(
+eventName: string,
+parser: (value: unknown) => ValidationResult<TPayload>,
+handler: (payload: TPayload) => void,
+): Promise<UnlistenFn> {
+return listen<unknown>(eventName, (event: Event<unknown>) => {
+const result = parser(event.payload)
+if (!result.ok) {
+throw new Error(`${eventName} emitted an invalid payload: ${result.error}`)
+}
+
+handler(result.value)
+})
 }

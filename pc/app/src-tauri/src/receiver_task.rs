@@ -81,6 +81,7 @@ impl ReceiverController {
     pub fn start(&mut self, app: AppHandle, settings: AppSettings) -> RuntimeStatus {
         self.packet_logging_enabled
             .store(settings.packet_logging_enabled, Ordering::Relaxed);
+        self.reap_finished_worker(&app);
 
         if self.stop_tx.is_some() {
             return self.status();
@@ -156,6 +157,25 @@ impl ReceiverController {
     pub fn set_packet_logging_enabled(&self, enabled: bool) {
         self.packet_logging_enabled
             .store(enabled, Ordering::Relaxed);
+    }
+
+    fn reap_finished_worker(&mut self, app: &AppHandle) {
+        let worker_finished = self
+            .join_handle
+            .as_ref()
+            .map(|join_handle| join_handle.is_finished())
+            .unwrap_or(false);
+
+        if !worker_finished {
+            return;
+        }
+
+        self.stop_tx = None;
+        if let Some(join_handle) = self.join_handle.take() {
+            if join_handle.join().is_err() {
+                emit_log(app, LogLevel::Error, "receiver worker panicked");
+            }
+        }
     }
 }
 

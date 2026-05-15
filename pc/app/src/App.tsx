@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useReducer, useState } from "react"
+import { useEffect, useMemo, useReducer, useRef, useState } from "react"
 
 import { appReducer, createInitialAppState } from "./app/reducer"
-import { getRuntimeStatus, getSettings, restartReceiver, saveSettings, startReceiver, stopReceiver } from "./app/tauriCommands"
+import { getRuntimeStatus, getSettings, restartReceiver, saveSettings, setPacketLoggingEnabled, startReceiver, stopReceiver } from "./app/tauriCommands"
 import { listenToLogEntry, listenToRuntimeStatusChanged, listenToSettingsChanged } from "./app/tauriEvents"
 import type { AppSettings, LogEntry } from "./app/types"
 import { validatePortInput } from "./app/validation"
@@ -15,6 +15,8 @@ import { ViGemStatusCard } from "./components/ViGemStatusCard"
 export function App() {
 const [state, dispatch] = useReducer(appReducer, undefined, createInitialAppState)
 const [portInput, setPortInput] = useState(String(state.draftSettings.port))
+const packetLoggingSaveChain = useRef<Promise<void>>(Promise.resolve())
+const packetLoggingRequestId = useRef(0)
 const portValidation = useMemo(() => validatePortInput(portInput), [portInput])
 
 useEffect(() => {
@@ -70,7 +72,42 @@ dispatch({ type: "draftSettingsChanged", settings: { port: validation.value } })
 }
 
 function handleToggle(key: keyof Omit<AppSettings, "port">, value: boolean) {
+if (key === "packetLoggingEnabled") {
+void handlePacketLoggingToggle(value)
+return
+}
+
 dispatch({ type: "draftSettingsChanged", settings: { [key]: value } })
+}
+
+async function handlePacketLoggingToggle(value: boolean) {
+const requestId = packetLoggingRequestId.current + 1
+packetLoggingRequestId.current = requestId
+const previousValue = state.draftSettings.packetLoggingEnabled
+dispatch({ type: "draftSettingsChanged", settings: { packetLoggingEnabled: value } })
+
+packetLoggingSaveChain.current = packetLoggingSaveChain.current.then(async () => {
+try {
+const savedSettings = await setPacketLoggingEnabled(value)
+if (requestId !== packetLoggingRequestId.current) return
+dispatch({ type: "packetLoggingSaved", enabled: savedSettings.packetLoggingEnabled })
+} catch (error: unknown) {
+if (requestId !== packetLoggingRequestId.current) return
+await restorePacketLoggingAfterFailure(previousValue)
+dispatch({ type: "logReceived", entry: createLocalLog("error", describeError(error)) })
+}
+})
+
+await packetLoggingSaveChain.current
+}
+
+async function restorePacketLoggingAfterFailure(previousValue: boolean) {
+try {
+const settings = await getSettings()
+dispatch({ type: "packetLoggingSaved", enabled: settings.packetLoggingEnabled })
+} catch {
+dispatch({ type: "draftSettingsChanged", settings: { packetLoggingEnabled: previousValue } })
+}
 }
 
 async function runCommand(command: () => Promise<unknown>) {
