@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish-release:
+    name: Publish GitHub release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+
+    steps:
+      - name: Generate calendar version
+        id: version
+        shell: bash
+        run: |
+          date_part="$(date -u +'%Y.%m.%d')"
+          version="v${date_part}.${GITHUB_RUN_NUMBER}"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download Windows app artifact from CI
+        uses: actions/download-artifact@v4
+        with:
+          name: ds-controller-pc-app
+          path: package/pc
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Download NDS ROM artifact from CI
+        uses: actions/download-artifact@v4
+        with:
+          name: ds-controller-nds
+          path: package/nds
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Create release zip
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p dist
+          (cd package && zip -r -D "../dist/ds-controller-${VERSION}.zip" pc nds)
+
+      - name: Verify release zip contents
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          zipinfo -1 "dist/ds-controller-${VERSION}.zip" | sort > actual.txt
+          cat > expected.txt <<'EOF'
+          nds/ds-controller.ini
+          nds/ds-controller.nds
+          pc/WebView2Loader.dll
+          pc/ds-controller.exe
+          EOF
+          diff -u expected.txt actual.txt
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          gh release create "$VERSION" dist/*.zip \
+            --target "$TARGET_SHA" \
+            --title "ds-controller ${VERSION}" \
+            --generate-notes \
+            --latest

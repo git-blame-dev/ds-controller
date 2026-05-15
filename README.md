@@ -1,6 +1,7 @@
 # ds-controller
 
 [![CI](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/git-blame-dev/ds-controller?label=release)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 
 Use a Nintendo DS or DS Lite as a wireless controller for Windows games.
 
@@ -45,7 +46,7 @@ Configure the Wi-Fi profile first from a Nintendo WFC-compatible DS game, such a
 - Tauri 2 system prerequisites for Windows app builds
 - `cargo-xwin` or native Windows tooling for Windows Rust validation
 - devkitPro with devkitARM, libnds, and dswifi for building the DS sender
-- Docker with `devkitpro/devkitarm:latest` if you prefer building the DS sender without installing devkitPro locally
+- Docker for building the DS sender with the pinned devkitARM image used by CI
 
 ## Configuration
 
@@ -60,7 +61,7 @@ pc_ip=192.168.1.50
 pc_port=26760
 ```
 
-Use `nds/ds-controller.example.ini` as a starting point. If no config file is found, the ROM uses the build-time defaults.
+Use `nds/ds-controller.ini` as a starting point. Set `pc_ip` to the Windows receiver PC's LAN IP address. Leave `pc_port` as `26760` unless that port is already in use or you changed the PC receiver port. If no config file is found, the ROM uses the build-time defaults.
 
 Copy the example build config and set the Windows PC LAN address:
 
@@ -87,9 +88,7 @@ make nds
 
 If devkitPro is not installed locally, build with Docker:
 
-```sh
-docker run --rm -v "$PWD":/work -w /work devkitpro/devkitarm:latest make nds
-```
+The default `make nds` target uses Docker with the same pinned devkitARM image as CI.
 
 Build the Windows PC GUI app:
 
@@ -103,6 +102,8 @@ Artifacts:
 - Portable Windows app files under `pc/target/x86_64-pc-windows-msvc/release/`:
   - `ds-controller.exe`
   - `WebView2Loader.dll`
+
+GitHub Releases publish one complete zip containing the Windows app files, NDS ROM, and `ds-controller.ini`.
 
 ## Run
 
