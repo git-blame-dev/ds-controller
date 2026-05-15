@@ -138,16 +138,16 @@ jobs:
       - name: Run Rust lints on Windows
         run: cargo clippy --manifest-path pc/Cargo.toml --locked -- -D warnings
 
-      - name: Build Tauri app on Windows
-        run: pnpm --dir pc/app tauri build
+      - name: Build Tauri portable app on Windows
+        run: pnpm --dir pc/app tauri build --no-bundle
 
-      - name: Upload Windows app bundle
+      - name: Upload Windows portable app
         uses: actions/upload-artifact@v4
         with:
           name: ds-controller-pc-app
           path: |
-            pc/target/release/bundle/**/*.msi
-            pc/target/release/bundle/**/*.exe
+            pc/target/release/ds-controller.exe
+            pc/target/release/WebView2Loader.dll
           if-no-files-found: error
 
   nds-rom-build:

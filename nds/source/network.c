@@ -1,6 +1,5 @@
 #include "network.h"
 
-#include "config.h"
 #include "display.h"
 
 #include <nds.h>
@@ -32,7 +31,7 @@ static const char *wifi_status_text(int status) {
     }
 }
 
-int ds_controller_network_init(ds_controller_network_t *network) {
+int ds_controller_network_init(ds_controller_network_t *network, const ds_controller_runtime_config_t *config) {
     memset(network, 0, sizeof(*network));
     network->socket_fd = -1;
 
@@ -73,8 +72,8 @@ int ds_controller_network_init(ds_controller_network_t *network) {
 
     memset(&target_addr, 0, sizeof(target_addr));
     target_addr.sin_family = AF_INET;
-    target_addr.sin_port = htons(DS_CONTROLLER_PC_PORT);
-    target_addr.sin_addr.s_addr = inet_addr(DS_CONTROLLER_PC_IP);
+    target_addr.sin_port = htons(config->pc_port);
+    target_addr.sin_addr.s_addr = inet_addr(config->pc_ip);
     if (target_addr.sin_addr.s_addr == INADDR_NONE) {
         network->last_error = -2;
         ds_controller_network_close(network);

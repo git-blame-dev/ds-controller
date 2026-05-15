@@ -35,19 +35,41 @@ export function isAppSettings(value: unknown): value is AppSettings {
 }
 
 export function isRuntimeStatus(value: unknown): value is RuntimeStatus {
-  if (!isRecord(value)) {
-    return false
-  }
+return parseRuntimeStatus(value).ok
+}
 
-return (
-isReceiverStatus(value.receiver) &&
-isViGemStatus(value.viGem) &&
-isDsButtonArray(value.pressedButtons) &&
-typeof value.packetCount === "number" &&
-Number.isInteger(value.packetCount) &&
-value.packetCount >= 0 &&
-(typeof value.lastPacketAt === "string" || value.lastPacketAt === null)
-)
+export function parseRuntimeStatus(value: unknown): ValidationResult<RuntimeStatus> {
+if (!isRecord(value)) {
+return { ok: false, error: "Runtime status must be an object." }
+}
+
+const receiver = parseReceiverStatus(value.receiver)
+if (!receiver.ok) return receiver
+
+const viGem = parseViGemStatus(value.viGem)
+if (!viGem.ok) return viGem
+
+const pressedButtons = parseDsButtonArray(value.pressedButtons)
+if (!pressedButtons.ok) return pressedButtons
+
+const packetCount = parsePacketCount(value.packetCount)
+if (!packetCount.ok) return packetCount
+
+const lastPacketAt = value.lastPacketAt
+if (!(typeof lastPacketAt === "string" || lastPacketAt === null)) {
+return { ok: false, error: "Runtime status lastPacketAt must be a string or null." }
+}
+
+return {
+ok: true,
+value: {
+receiver: receiver.value,
+viGem: viGem.value,
+pressedButtons: pressedButtons.value,
+packetCount: packetCount.value,
+lastPacketAt,
+},
+}
 }
 
 export function isLogEntry(value: unknown): value is LogEntry {
@@ -71,39 +93,66 @@ export function isDsButtonArray(value: unknown): value is readonly DsButton[] {
   return Array.isArray(value) && value.every(isDsButton)
 }
 
-function isReceiverStatus(value: unknown): value is ReceiverStatus {
-  if (!isRecord(value) || typeof value.kind !== "string") {
-    return false
-  }
-
-  switch (value.kind) {
-    case "idle":
-    case "starting":
-    case "stopping":
-      return true
-    case "running":
-      return typeof value.boundAddress === "string" && (typeof value.lockedSender === "string" || value.lockedSender === null)
-    case "error":
-      return typeof value.message === "string"
-    default:
-      return false
-  }
+function parseReceiverStatus(value: unknown): ValidationResult<ReceiverStatus> {
+if (!isRecord(value) || typeof value.kind !== "string") {
+return { ok: false, error: "Receiver status must include a string kind." }
 }
 
-function isViGemStatus(value: unknown): value is ViGemStatus {
-  if (!isRecord(value) || typeof value.kind !== "string") {
-    return false
-  }
+switch (value.kind) {
+case "idle":
+case "starting":
+case "stopping":
+return { ok: true, value: { kind: value.kind } }
+case "running":
+{
+const boundAddress = value.boundAddress
+const lockedSender = value.lockedSender
+if (typeof boundAddress !== "string" || !(typeof lockedSender === "string" || lockedSender === null)) {
+return { ok: false, error: "Running receiver status has invalid sender fields." }
+}
+return { ok: true, value: { kind: "running", boundAddress, lockedSender } }
+}
+case "error":
+return typeof value.message === "string"
+? { ok: true, value: { kind: "error", message: value.message } }
+: { ok: false, error: "Receiver error status must include a message." }
+default:
+return { ok: false, error: `Unknown receiver status kind: ${value.kind}` }
+}
+}
 
-  switch (value.kind) {
-    case "unknown":
-    case "ready":
-      return true
-    case "error":
-      return typeof value.message === "string"
-    default:
-      return false
-  }
+function parseViGemStatus(value: unknown): ValidationResult<ViGemStatus> {
+if (!isRecord(value) || typeof value.kind !== "string") {
+return { ok: false, error: "ViGEm status must include a string kind." }
+}
+
+switch (value.kind) {
+case "unknown":
+case "ready":
+return { ok: true, value: { kind: value.kind } }
+case "error":
+return typeof value.message === "string"
+? { ok: true, value: { kind: "error", message: value.message } }
+: { ok: false, error: "ViGEm error status must include a message." }
+default:
+return { ok: false, error: `Unknown ViGEm status kind: ${value.kind}` }
+}
+}
+
+function parseDsButtonArray(value: unknown): ValidationResult<readonly DsButton[]> {
+if (!isDsButtonArray(value)) {
+return { ok: false, error: "Pressed buttons must be a DS button array." }
+}
+
+return { ok: true, value }
+}
+
+function parsePacketCount(value: unknown): ValidationResult<number> {
+if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
+return { ok: true, value }
+}
+
+return { ok: false, error: "Packet count must be a non-negative safe integer." }
 }
 
 function isLogLevel(value: unknown): value is LogLevel {

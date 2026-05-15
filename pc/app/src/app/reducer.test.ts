@@ -22,13 +22,31 @@ describe("appReducer", () => {
     expect(state.logs.at(-1)?.id).toBe("log-1000")
   })
 
-  test("tracks unsaved settings when the draft port changes", () => {
-    const state = appReducer(createInitialAppState(), {
-      type: "draftSettingsChanged",
-      settings: { port: 26761 },
-    })
+test("tracks unsaved settings when the draft port changes", () => {
+const state = appReducer(createInitialAppState(), {
+type: "draftSettingsChanged",
+settings: { port: 26761 },
+})
 
-    expect(state.draftSettings.port).toBe(26761)
-    expect(state.hasUnsavedSettings).toBe(true)
-  })
+expect(state.draftSettings.port).toBe(26761)
+expect(state.hasUnsavedSettings).toBe(true)
+})
+
+test("saves packet logging without discarding unrelated draft settings", () => {
+const withDraftPort = appReducer(createInitialAppState(), {
+type: "draftSettingsChanged",
+settings: { port: 26761 },
+})
+
+const state = appReducer(withDraftPort, {
+type: "packetLoggingSaved",
+enabled: true,
+})
+
+expect(state.settings.packetLoggingEnabled).toBe(true)
+expect(state.draftSettings.packetLoggingEnabled).toBe(true)
+expect(state.settings.port).toBe(26760)
+expect(state.draftSettings.port).toBe(26761)
+expect(state.hasUnsavedSettings).toBe(true)
+})
 })

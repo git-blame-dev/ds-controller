@@ -36,17 +36,28 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         draftSettings: action.settings,
         hasUnsavedSettings: false,
       }
-    case "draftSettingsChanged": {
-      const draftSettings = { ...state.draftSettings, ...action.settings }
+case "draftSettingsChanged": {
+const draftSettings = { ...state.draftSettings, ...action.settings }
 
-      return {
-        ...state,
-        draftSettings,
-        hasUnsavedSettings: !settingsEqual(state.settings, draftSettings),
-      }
-    }
-    case "runtimeStatusReceived":
-      return { ...state, runtimeStatus: action.runtimeStatus }
+return {
+...state,
+draftSettings,
+hasUnsavedSettings: !settingsEqual(state.settings, draftSettings),
+}
+}
+case "packetLoggingSaved": {
+const settings = { ...state.settings, packetLoggingEnabled: action.enabled }
+const draftSettings = { ...state.draftSettings, packetLoggingEnabled: action.enabled }
+
+return {
+...state,
+settings,
+draftSettings,
+hasUnsavedSettings: !settingsEqual(settings, draftSettings),
+}
+}
+case "runtimeStatusReceived":
+return { ...state, runtimeStatus: action.runtimeStatus }
     case "pressedButtonsReceived":
       return {
         ...state,

@@ -60,16 +60,19 @@ impl From<RuntimeStatus> for RuntimeStatusDto {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum ReceiverStatusDto {
+    #[serde(rename = "idle")]
     Idle,
+    #[serde(rename = "starting")]
     Starting,
+    #[serde(rename = "running", rename_all = "camelCase")]
     Running {
         bound_address: String,
         locked_sender: Option<String>,
     },
+    #[serde(rename = "stopping")]
     Stopping,
-    Error {
-        message: String,
-    },
+    #[serde(rename = "error")]
+    Error { message: String },
 }
 
 impl From<ReceiverStatus> for ReceiverStatusDto {
@@ -93,8 +96,11 @@ impl From<ReceiverStatus> for ReceiverStatusDto {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum VigemStatusDto {
+    #[serde(rename = "unknown")]
     Unknown,
+    #[serde(rename = "ready")]
     Ready,
+    #[serde(rename = "error")]
     Error { message: String },
 }
 
@@ -142,5 +148,57 @@ impl CommandErrorDto {
             code: "receiverError".to_owned(),
             message: message.into(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn serializes_default_runtime_status_with_frontend_contract() {
+        let status = RuntimeStatusDto::from(RuntimeStatus::default());
+
+        assert_eq!(
+            serde_json::to_value(status).expect("runtime status should serialize"),
+            json!({
+            "receiver": { "kind": "idle" },
+            "viGem": { "kind": "unknown" },
+            "pressedButtons": [],
+            "packetCount": 0,
+            "lastPacketAt": null,
+            })
+        );
+    }
+
+    #[test]
+    fn serializes_running_runtime_status_with_frontend_contract() {
+        let status = RuntimeStatusDto::from(RuntimeStatus {
+            receiver: ReceiverStatus::Running {
+                bound_address: "0.0.0.0:26760".to_owned(),
+                locked_sender: None,
+            },
+            vigem: VigemStatus::Ready,
+            pressed_buttons: vec!["a".to_owned(), "start".to_owned()],
+            packet_count: 42,
+            last_packet_at: Some("123456".to_owned()),
+        });
+
+        assert_eq!(
+            serde_json::to_value(status).expect("runtime status should serialize"),
+            json!({
+            "receiver": {
+            "kind": "running",
+            "boundAddress": "0.0.0.0:26760",
+            "lockedSender": null,
+            },
+            "viGem": { "kind": "ready" },
+            "pressedButtons": ["a", "start"],
+            "packetCount": 42,
+            "lastPacketAt": "123456",
+            })
+        );
     }
 }

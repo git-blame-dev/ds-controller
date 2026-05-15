@@ -35,10 +35,7 @@ DATA :=
 GRAPHICS :=
 NITRO :=
 PC_PORT ?= 26760
-
-ifeq ($(strip $(PC_IP)),)
-$(error "Please set PC_IP. Example: make PC_IP=192.168.1.50 PC_PORT=26760")
-endif
+PC_IP ?= 192.0.2.1
 
 ARCH := -march=armv5te -mtune=arm946e-s
 
@@ -48,7 +45,7 @@ CXXFLAGS := $(CFLAGS) -fno-rtti -fno-exceptions
 ASFLAGS := -g $(ARCH)
 LDFLAGS = -specs=ds_arm9.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS := -ldswifi9 -lnds9
+LIBS := -ldswifi9 -lfat -lnds9
 LIBDIRS := $(LIBNDS) $(PORTLIBS)
 
 ifneq ($(BUILD),$(notdir $(CURDIR)))
