@@ -145,13 +145,26 @@ jobs:
       - name: Build Tauri portable app on Windows
         run: pnpm --dir pc/app tauri build --no-bundle
 
+      - name: Stage Windows release files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/pc | Out-Null
+          Copy-Item pc/target/release/ds-controller.exe dist/pc/ds-controller.exe
+
+          $webViewLoader = Get-ChildItem pc/target/release/build/webview2-com-sys-*/out/x64/WebView2Loader.dll |
+            Select-Object -First 1
+          if (-not $webViewLoader) {
+            Write-Error "WebView2Loader.dll was not produced by webview2-com-sys"
+          }
+          Copy-Item $webViewLoader.FullName dist/pc/WebView2Loader.dll
+
+          Get-ChildItem dist/pc | Select-Object Name, Length
+
       - name: Upload Windows portable app
         uses: actions/upload-artifact@v4
         with:
           name: ds-controller-pc-app
-          path: |
-            pc/target/release/ds-controller.exe
-            pc/target/release/WebView2Loader.dll
+          path: dist/pc
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
