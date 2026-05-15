@@ -5,12 +5,8 @@ import { getRuntimeStatus, getSettings, restartReceiver, saveSettings, setPacket
 import { listenToLogEntry, listenToRuntimeStatusChanged, listenToSettingsChanged } from "./app/tauriEvents"
 import type { AppSettings, LogEntry } from "./app/types"
 import { validatePortInput } from "./app/validation"
-import { HeaderBar } from "./components/HeaderBar"
 import { LogPanel } from "./components/LogPanel"
 import { ReceiverCard } from "./components/ReceiverCard"
-import { RuntimeStatusCard } from "./components/RuntimeStatusCard"
-import { SenderCard } from "./components/SenderCard"
-import { ViGemStatusCard } from "./components/ViGemStatusCard"
 
 export function App() {
 const [state, dispatch] = useReducer(appReducer, undefined, createInitialAppState)
@@ -134,15 +130,17 @@ dispatch({ type: "runtimeStatusReceived", runtimeStatus })
 }
 
 return (
-<main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,hsl(187_92%_52%_/_0.18),transparent_34%),radial-gradient(circle_at_bottom_right,hsl(262_90%_66%_/_0.16),transparent_32%),hsl(var(--background))] px-6 py-5 text-foreground">
-<div className="mx-auto flex h-[calc(100vh-2.5rem)] min-h-[620px] max-w-6xl flex-col gap-5">
-<HeaderBar receiver={state.runtimeStatus.receiver} />
-<div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(280px,0.55fr)]">
-<div className="flex min-h-0 flex-col gap-4">
+<main className="min-h-screen overflow-y-auto bg-[radial-gradient(circle_at_top_left,hsl(187_92%_52%_/_0.18),transparent_34%),radial-gradient(circle_at_bottom_right,hsl(262_90%_66%_/_0.16),transparent_32%),hsl(var(--background))] px-6 py-5 text-foreground">
+<div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-4xl flex-col gap-4">
+<div className="flex min-h-0 flex-1 flex-col gap-4">
 <ReceiverCard
 draftSettings={{ ...state.draftSettings, port: portValidation.ok ? portValidation.value : state.draftSettings.port }}
 portValue={portInput}
 receiver={state.runtimeStatus.receiver}
+viGem={state.runtimeStatus.viGem}
+lastPacketAt={state.runtimeStatus.lastPacketAt}
+packetCount={state.runtimeStatus.packetCount}
+pressedButtons={state.runtimeStatus.pressedButtons}
 hasUnsavedSettings={state.hasUnsavedSettings || String(state.draftSettings.port) !== portInput}
 portValidation={portValidation}
 onPortChange={handlePortChange}
@@ -157,13 +155,7 @@ dispatch({ type: "runtimeStatusReceived", runtimeStatus })
 })}
 onApplyRestart={() => void handleApplyRestart()}
 />
-<RuntimeStatusCard status={state.runtimeStatus} />
 <LogPanel logs={state.logs} />
-</div>
-<aside className="flex flex-col gap-4">
-<ViGemStatusCard status={state.runtimeStatus.viGem} />
-<SenderCard receiver={state.runtimeStatus.receiver} lastPacketAt={state.runtimeStatus.lastPacketAt} />
-</aside>
 </div>
 </div>
 </main>
