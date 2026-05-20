@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: release-main
   cancel-in-progress: false
 
 jobs:
@@ -24,7 +24,9 @@ jobs:
     timeout-minutes: 10
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
 
     steps:
       - name: Check out repository
@@ -46,18 +48,54 @@ jobs:
         shell: bash
         env:
           TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           git fetch --tags --force
 
-          previous_tag="$(git describe --tags --abbrev=0 "${TARGET_SHA}^" 2>/dev/null || true)"
+          previous_tag="$(git describe --tags --match 'v[0-9]*' --abbrev=0 "${TARGET_SHA}^" 2>/dev/null || true)"
           printf 'previous_tag=%s\n' "$previous_tag" >> "$GITHUB_OUTPUT"
 
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            tag_target="$(git rev-list -n 1 "$VERSION")"
+            if [ "$tag_target" != "$TARGET_SHA" ]; then
+              printf 'Refusing to publish %s because tag %s already points at %s.\n' "$TARGET_SHA" "$VERSION" "$tag_target" >&2
+              exit 1
+            fi
+          fi
+
           existing_release_tags="$(git tag --points-at "$TARGET_SHA" --list 'v[0-9]*' || true)"
+          if [ -z "$existing_release_tags" ]; then
+            existing_release_tags="$(gh api "repos/${REPOSITORY}/releases" --paginate --jq ".[] | select(.target_commitish == \"${TARGET_SHA}\") | .tag_name" | head -n 1)"
+          fi
+
           if [ -n "$existing_release_tags" ]; then
-            printf 'Release tag(s) already point at %s:\n%s\n' "$TARGET_SHA" "$existing_release_tags"
-            printf 'should_publish=false\n' >> "$GITHUB_OUTPUT"
-            printf 'skip_reason=%s\n' 'target commit already has a release tag' >> "$GITHUB_OUTPUT"
-            exit 0
+            while IFS= read -r existing_tag; do
+              [ -n "$existing_tag" ] || continue
+
+              release_assets="$(gh release view "$existing_tag" --repo "$REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
+              missing_assets=false
+
+              for required_asset in "ds-controller-${existing_tag}.zip" 'SHA256SUMS'; do
+                if ! printf '%s\n' "$release_assets" | grep -Fxq "$required_asset"; then
+                  printf 'Existing release %s is missing required asset %s.\n' "$existing_tag" "$required_asset" >&2
+                  missing_assets=true
+                fi
+              done
+
+              if [ "$missing_assets" = true ]; then
+                printf 'Refusing to create a second release for %s while %s is incomplete.\n' "$TARGET_SHA" "$existing_tag" >&2
+                exit 1
+              fi
+
+              printf 'Release %s already targets %s; skipping duplicate release.\n' "$existing_tag" "$TARGET_SHA"
+              printf 'should_publish=false\n' >> "$GITHUB_OUTPUT"
+              printf 'skip_reason=%s\n' "release ${existing_tag} already targets this commit" >> "$GITHUB_OUTPUT"
+              exit 0
+            done <<EOF
+          $existing_release_tags
+          EOF
           fi
 
           if [ -z "$previous_tag" ]; then
@@ -90,7 +128,21 @@ jobs:
 
       - name: Skip release
         if: steps.release_scope.outputs.should_publish != 'true'
-        run: printf 'Skipping release: %s.\n' "${{ steps.release_scope.outputs.skip_reason }}"
+        run: |
+          printf 'Skipping release: %s.\n' "${{ steps.release_scope.outputs.skip_reason }}"
+
+      - name: Confirm main still targets released commit
+        if: steps.release_scope.outputs.should_publish == 'true'
+        env:
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git fetch origin main
+          current_main="$(git rev-parse FETCH_HEAD)"
+
+          if [ "$current_main" != "$TARGET_SHA" ]; then
+            printf 'Refusing to publish %s because origin/main is now %s.\n' "$TARGET_SHA" "$current_main" >&2
+            exit 1
+          fi
 
       - name: Download Windows app artifact from CI
         if: steps.release_scope.outputs.should_publish == 'true'
@@ -132,6 +184,14 @@ jobs:
           EOF
           diff -u expected.txt actual.txt
 
+      - name: Generate release checksums
+        if: steps.release_scope.outputs.should_publish == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cd dist
+          sha256sum "ds-controller-${VERSION}.zip" > SHA256SUMS
+
       - name: Generate release notes
         if: steps.release_scope.outputs.should_publish == 'true'
         env:
@@ -163,6 +223,7 @@ jobs:
             printf -- "- WebView2 loader: \`pc/WebView2Loader.dll\`\n"
             printf -- "- Nintendo DS ROM: \`nds/ds-controller.nds\`\n"
             printf -- "- DS config example: \`nds/ds-controller.ini\`\n"
+            printf -- "- Checksums: \`SHA256SUMS\`\n"
 
             printf '\n## Verification\n\n'
             printf -- "- \`make test\`\n"
@@ -185,7 +246,15 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          gh release create "$VERSION" dist/*.zip \
+          git fetch origin main
+          current_main="$(git rev-parse FETCH_HEAD)"
+
+          if [ "$current_main" != "$TARGET_SHA" ]; then
+            printf 'Refusing to publish %s because origin/main is now %s.\n' "$TARGET_SHA" "$current_main" >&2
+            exit 1
+          fi
+
+          gh release create "$VERSION" dist/* \
             --target "$TARGET_SHA" \
             --title "ds-controller ${VERSION}" \
             --notes-file release-notes.md \
