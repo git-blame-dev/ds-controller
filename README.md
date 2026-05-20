@@ -1,9 +1,11 @@
-# ds-controller
+# 🎮 DS Controller
 
 [![CI](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/git-blame-dev/ds-controller?label=release)](https://github.com/git-blame-dev/ds-controller/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/git-blame-dev/ds-controller?label=release)](https://github.com/git-blame-dev/ds-controller/releases/latest) [![Windows app](https://img.shields.io/badge/Windows%20app-in%20release%20zip-0078D4)](https://github.com/git-blame-dev/ds-controller/releases/latest) [![Nintendo DS ROM](https://img.shields.io/badge/DS%20ROM-in%20release%20zip-blue)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 
-Use a Nintendo DS or DS Lite as a wireless controller for Windows games.
+Use a Nintendo DS as a controller for any PC game.
+
+![ds-controller demo](demo.webp)
 
 The DS homebrew app reads the built-in buttons and sends compact UDP controller-state packets over Wi-Fi. The Windows PC app is a dark Tauri desktop GUI that maps those packets to a ViGEm virtual Xbox 360 controller, so games see normal XInput input.
 
