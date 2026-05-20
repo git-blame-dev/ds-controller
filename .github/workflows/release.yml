@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -146,7 +146,7 @@ jobs:
 
       - name: Download Windows app artifact from CI
         if: steps.release_scope.outputs.should_publish == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ds-controller-pc-app
           path: package/pc
@@ -155,7 +155,7 @@ jobs:
 
       - name: Download NDS ROM artifact from CI
         if: steps.release_scope.outputs.should_publish == 'true'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ds-controller-nds
           path: package/nds
