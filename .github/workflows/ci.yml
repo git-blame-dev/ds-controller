@@ -104,12 +104,11 @@ jobs:
           mkdir -p dist/pc
           cp pc/target/x86_64-pc-windows-msvc/release/ds-controller.exe dist/pc/ds-controller.exe
 
-          web_view_loaders=(pc/target/x86_64-pc-windows-msvc/release/build/webview2-com-sys-*/out/x64/WebView2Loader.dll)
-          if [ ! -e "${web_view_loaders[0]}" ]; then
-            printf '%s\n' 'WebView2Loader.dll was not produced by webview2-com-sys' >&2
+          if [ ! -e pc/target/x86_64-pc-windows-msvc/release/WebView2Loader.dll ]; then
+            printf '%s\n' 'WebView2Loader.dll was not staged by make pc' >&2
             exit 1
           fi
-          cp "${web_view_loaders[0]}" dist/pc/WebView2Loader.dll
+          cp pc/target/x86_64-pc-windows-msvc/release/WebView2Loader.dll dist/pc/WebView2Loader.dll
 
           ls -l dist/pc
 
