@@ -9,8 +9,6 @@ use crate::protocol::{self, ControllerState, PACKET_SIZE};
 pub struct ReceiverConfig {
     pub bind_addr: SocketAddr,
     pub timeout: Duration,
-    pub fixed_sender: Option<SocketAddr>,
-    pub accept_first_sender: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,8 +51,6 @@ impl From<protocol::ParseError> for ReceiverError {
 
 pub struct Receiver {
     socket: UdpSocket,
-    config: ReceiverConfig,
-    active_sender: Option<SocketAddr>,
     latest_sequence: Option<u32>,
     timed_out: bool,
 }
@@ -66,8 +62,6 @@ impl Receiver {
 
         Ok(Self {
             socket,
-            config,
-            active_sender: config.fixed_sender,
             latest_sequence: None,
             timed_out: false,
         })
@@ -79,15 +73,7 @@ impl Receiver {
         loop {
             match self.socket.recv_from(&mut buffer) {
                 Ok((len, sender)) => {
-                    if !self.should_parse_sender(sender) {
-                        continue;
-                    }
-
                     let state = protocol::parse_controller_state(&buffer[..len])?;
-
-                    if !self.accept_sender(sender) {
-                        continue;
-                    }
 
                     if !self.accept_sequence(state.sequence) {
                         continue;
@@ -112,24 +98,6 @@ impl Receiver {
                 }
                 Err(error) => return Err(error.into()),
             }
-        }
-    }
-
-    fn should_parse_sender(&self, sender: SocketAddr) -> bool {
-        match self.active_sender {
-            Some(active_sender) => sender == active_sender,
-            None => true,
-        }
-    }
-
-    fn accept_sender(&mut self, sender: SocketAddr) -> bool {
-        match self.active_sender {
-            Some(active_sender) => sender == active_sender,
-            None if self.config.accept_first_sender => {
-                self.active_sender = Some(sender);
-                true
-            }
-            None => true,
         }
     }
 
@@ -162,8 +130,6 @@ mod tests {
         ReceiverConfig {
             bind_addr: localhost(0),
             timeout: Duration::from_millis(20),
-            fixed_sender: None,
-            accept_first_sender: false,
         }
     }
 
@@ -206,35 +172,12 @@ mod tests {
     }
 
     #[test]
-    fn filters_to_fixed_sender() {
-        let accepted_sender = bind_sender();
-        let ignored_sender = bind_sender();
-        let mut config = receiver_config();
-        config.fixed_sender = Some(accepted_sender.local_addr().expect("accepted address"));
-        let mut receiver = bind_receiver(config);
-        let expected = state(2, Buttons::B);
-
-        send_state(&ignored_sender, &receiver, state(1, Buttons::A));
-        send_state(&accepted_sender, &receiver, expected);
-
-        assert_eq!(
-            receiver.next_event().expect("state event"),
-            ReceiverEvent::State {
-                sender: accepted_sender.local_addr().expect("accepted address"),
-                state: expected,
-            }
-        );
-    }
-
-    #[test]
-    fn accept_first_sender_locks_after_valid_packet() {
+    fn accepts_valid_packets_from_different_senders() {
+        let mut receiver = bind_receiver(receiver_config());
         let first_sender = bind_sender();
-        let ignored_sender = bind_sender();
-        let mut config = receiver_config();
-        config.accept_first_sender = true;
-        let mut receiver = bind_receiver(config);
+        let second_sender = bind_sender();
         let first = state(1, Buttons::A);
-        let second = state(3, Buttons::X);
+        let second = state(2, Buttons::B);
 
         send_state(&first_sender, &receiver, first);
         assert_eq!(
@@ -245,44 +188,12 @@ mod tests {
             }
         );
 
-        send_state(&ignored_sender, &receiver, state(2, Buttons::B));
-        send_state(&first_sender, &receiver, second);
-
+        send_state(&second_sender, &receiver, second);
         assert_eq!(
             receiver.next_event().expect("second state"),
             ReceiverEvent::State {
-                sender: first_sender.local_addr().expect("first address"),
+                sender: second_sender.local_addr().expect("second address"),
                 state: second,
-            }
-        );
-    }
-
-    #[test]
-    fn accept_first_sender_does_not_lock_to_malformed_packet() {
-        let malformed_sender = bind_sender();
-        let valid_sender = bind_sender();
-        let mut config = receiver_config();
-        config.accept_first_sender = true;
-        let mut receiver = bind_receiver(config);
-        let expected = state(1, Buttons::Y);
-
-        malformed_sender
-            .send_to(
-                &[0; 4],
-                receiver.socket.local_addr().expect("receiver address"),
-            )
-            .expect("malformed packet sends");
-        assert!(matches!(
-            receiver.next_event(),
-            Err(ReceiverError::Parse(_))
-        ));
-
-        send_state(&valid_sender, &receiver, expected);
-        assert_eq!(
-            receiver.next_event().expect("state event"),
-            ReceiverEvent::State {
-                sender: valid_sender.local_addr().expect("valid sender address"),
-                state: expected,
             }
         );
     }

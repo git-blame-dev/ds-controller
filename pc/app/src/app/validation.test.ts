@@ -47,7 +47,7 @@ lastPacketAt: null,
 test("accepts the canonical backend running status payload", () => {
 expect(
 parseRuntimeStatus({
-receiver: { kind: "running", boundAddress: "0.0.0.0:26760", lockedSender: null },
+receiver: { kind: "running", boundAddress: "0.0.0.0:26760", lastSender: null },
 viGem: { kind: "ready" },
 pressedButtons: ["a", "start"],
 packetCount: 42,
@@ -56,7 +56,7 @@ lastPacketAt: "123456",
 ).toEqual({
 ok: true,
 value: {
-receiver: { kind: "running", boundAddress: "0.0.0.0:26760", lockedSender: null },
+receiver: { kind: "running", boundAddress: "0.0.0.0:26760", lastSender: null },
 viGem: { kind: "ready" },
 pressedButtons: ["a", "start"],
 packetCount: 42,

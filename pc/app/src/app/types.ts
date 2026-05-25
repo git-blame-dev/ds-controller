@@ -7,14 +7,13 @@ export type DsButton = (typeof DS_BUTTONS)[number]
 export interface AppSettings {
   readonly port: number
   readonly startReceiverWhenAppOpens: boolean
-  readonly lockToFirstSender: boolean
   readonly packetLoggingEnabled: boolean
 }
 
 export type ReceiverStatus =
   | { readonly kind: "idle" }
   | { readonly kind: "starting" }
-  | { readonly kind: "running"; readonly boundAddress: string; readonly lockedSender: string | null }
+  | { readonly kind: "running"; readonly boundAddress: string; readonly lastSender: string | null }
   | { readonly kind: "stopping" }
   | { readonly kind: "error"; readonly message: string }
 

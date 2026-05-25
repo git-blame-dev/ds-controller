@@ -4,7 +4,6 @@ import { MAX_LOG_ENTRIES } from "./types"
 export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   port: 26760,
   startReceiverWhenAppOpens: true,
-  lockToFirstSender: true,
   packetLoggingEnabled: false,
 })
 
@@ -81,7 +80,6 @@ function settingsEqual(left: AppSettings, right: AppSettings): boolean {
   return (
     left.port === right.port &&
     left.startReceiverWhenAppOpens === right.startReceiverWhenAppOpens &&
-    left.lockToFirstSender === right.lockToFirstSender &&
     left.packetLoggingEnabled === right.packetLoggingEnabled
   )
 }

@@ -43,7 +43,7 @@ onApplyRestart,
 const isRunning = receiver.kind === "running" || receiver.kind === "starting"
 const canApply = hasUnsavedSettings && portValidation.ok
 const bindAddress = receiver.kind === "running" ? receiver.boundAddress : "Not listening"
-const sender = receiver.kind === "running" ? receiver.lockedSender ?? "Waiting for DS" : "None"
+const sender = receiver.kind === "running" ? receiver.lastSender ?? "Waiting for DS" : "None"
 const viGemTone = viGemStatusTone(viGem)
 
 return (
@@ -87,7 +87,7 @@ Apply & Restart
 
 <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 <MetricItem label="Bind" value={bindAddress} />
-<MetricItem label="Sender" value={sender} />
+<MetricItem label="Last sender" value={sender} />
 <MetricItem label="Last packet" value={formatTimestamp(lastPacketAt)} />
 <MetricItem label="Packets" value={packetCount} />
 </dl>
@@ -97,9 +97,8 @@ Apply & Restart
 </div>
 {viGem.kind === "error" ? <p className="mt-3 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{viGem.message}</p> : null}
 
-<div className="mt-4 grid gap-3 md:grid-cols-3">
+<div className="mt-4 grid gap-3 md:grid-cols-2">
 <SwitchRow label="Start receiver when app opens" checked={draftSettings.startReceiverWhenAppOpens} onChange={(value) => onToggle("startReceiverWhenAppOpens", value)} />
-<SwitchRow label="Lock to first sender" checked={draftSettings.lockToFirstSender} onChange={(value) => onToggle("lockToFirstSender", value)} />
 <SwitchRow label="Show packet stream in logs" checked={draftSettings.packetLoggingEnabled} onChange={(value) => onToggle("packetLoggingEnabled", value)} />
 </div>
 </section>

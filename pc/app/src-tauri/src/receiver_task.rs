@@ -23,7 +23,7 @@ pub enum ReceiverStatus {
     Starting,
     Running {
         bound_address: String,
-        locked_sender: Option<String>,
+        last_sender: Option<String>,
     },
     Stopping,
     Error(String),
@@ -201,8 +201,6 @@ fn run_receiver_worker(
     let config = ReceiverConfig {
         bind_addr,
         timeout: Duration::from_millis(settings.timeout_ms),
-        fixed_sender: None,
-        accept_first_sender: settings.lock_to_first_sender,
     };
 
     let mut receiver = match Receiver::bind(config) {
@@ -253,7 +251,7 @@ fn run_receiver_worker(
         RuntimeStatus {
             receiver: ReceiverStatus::Running {
                 bound_address: bind_addr.to_string(),
-                locked_sender: None,
+                last_sender: None,
             },
             vigem: VigemStatus::Ready,
             pressed_buttons: Vec::new(),
@@ -296,7 +294,7 @@ fn run_receiver_worker(
                     RuntimeStatus {
                         receiver: ReceiverStatus::Running {
                             bound_address: bind_addr.to_string(),
-                            locked_sender: Some(sender.to_string()),
+                            last_sender: Some(sender.to_string()),
                         },
                         vigem: VigemStatus::Ready,
                         pressed_buttons,
@@ -330,7 +328,7 @@ fn run_receiver_worker(
                     RuntimeStatus {
                         receiver: ReceiverStatus::Running {
                             bound_address: bind_addr.to_string(),
-                            locked_sender: None,
+                            last_sender: None,
                         },
                         vigem: VigemStatus::Ready,
                         pressed_buttons: Vec::new(),

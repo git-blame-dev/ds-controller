@@ -8,7 +8,6 @@ use crate::settings::AppSettings;
 pub struct AppSettingsDto {
     pub port: u16,
     pub start_receiver_when_app_opens: bool,
-    pub lock_to_first_sender: bool,
     pub packet_logging_enabled: bool,
 }
 
@@ -17,7 +16,6 @@ impl From<AppSettings> for AppSettingsDto {
         Self {
             port: settings.port,
             start_receiver_when_app_opens: settings.start_receiver_when_app_opens,
-            lock_to_first_sender: settings.lock_to_first_sender,
             packet_logging_enabled: settings.packet_logging_enabled,
         }
     }
@@ -28,7 +26,6 @@ impl From<AppSettingsDto> for AppSettings {
         Self {
             port: settings.port,
             start_receiver_when_app_opens: settings.start_receiver_when_app_opens,
-            lock_to_first_sender: settings.lock_to_first_sender,
             packet_logging_enabled: settings.packet_logging_enabled,
             timeout_ms: AppSettings::default().timeout_ms,
         }
@@ -67,7 +64,7 @@ pub enum ReceiverStatusDto {
     #[serde(rename = "running", rename_all = "camelCase")]
     Running {
         bound_address: String,
-        locked_sender: Option<String>,
+        last_sender: Option<String>,
     },
     #[serde(rename = "stopping")]
     Stopping,
@@ -82,10 +79,10 @@ impl From<ReceiverStatus> for ReceiverStatusDto {
             ReceiverStatus::Starting => Self::Starting,
             ReceiverStatus::Running {
                 bound_address,
-                locked_sender,
+                last_sender,
             } => Self::Running {
                 bound_address,
-                locked_sender,
+                last_sender,
             },
             ReceiverStatus::Stopping => Self::Stopping,
             ReceiverStatus::Error(message) => Self::Error { message },
@@ -178,7 +175,7 @@ mod tests {
         let status = RuntimeStatusDto::from(RuntimeStatus {
             receiver: ReceiverStatus::Running {
                 bound_address: "0.0.0.0:26760".to_owned(),
-                locked_sender: None,
+                last_sender: None,
             },
             vigem: VigemStatus::Ready,
             pressed_buttons: vec!["a".to_owned(), "start".to_owned()],
@@ -192,7 +189,7 @@ mod tests {
             "receiver": {
             "kind": "running",
             "boundAddress": "0.0.0.0:26760",
-            "lockedSender": null,
+            "lastSender": null,
             },
             "viGem": { "kind": "ready" },
             "pressedButtons": ["a", "start"],

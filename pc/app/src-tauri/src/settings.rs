@@ -12,7 +12,6 @@ pub const DEFAULT_TIMEOUT_MS: u64 = 150;
 pub struct AppSettings {
     pub port: u16,
     pub start_receiver_when_app_opens: bool,
-    pub lock_to_first_sender: bool,
     pub packet_logging_enabled: bool,
     pub timeout_ms: u64,
 }
@@ -61,7 +60,6 @@ impl Default for AppSettings {
         Self {
             port: DEFAULT_PORT,
             start_receiver_when_app_opens: true,
-            lock_to_first_sender: true,
             packet_logging_enabled: false,
             timeout_ms: DEFAULT_TIMEOUT_MS,
         }
@@ -115,7 +113,6 @@ mod tests {
 
         assert_eq!(settings.port, DEFAULT_PORT);
         assert!(settings.start_receiver_when_app_opens);
-        assert!(settings.lock_to_first_sender);
         assert!(!settings.packet_logging_enabled);
         assert_eq!(settings.timeout_ms, DEFAULT_TIMEOUT_MS);
     }

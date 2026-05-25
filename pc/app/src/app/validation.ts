@@ -29,7 +29,6 @@ export function isAppSettings(value: unknown): value is AppSettings {
   return (
     isValidPort(value.port) &&
     typeof value.startReceiverWhenAppOpens === "boolean" &&
-    typeof value.lockToFirstSender === "boolean" &&
     typeof value.packetLoggingEnabled === "boolean"
   )
 }
@@ -106,11 +105,11 @@ return { ok: true, value: { kind: value.kind } }
 case "running":
 {
 const boundAddress = value.boundAddress
-const lockedSender = value.lockedSender
-if (typeof boundAddress !== "string" || !(typeof lockedSender === "string" || lockedSender === null)) {
+const lastSender = value.lastSender
+if (typeof boundAddress !== "string" || !(typeof lastSender === "string" || lastSender === null)) {
 return { ok: false, error: "Running receiver status has invalid sender fields." }
 }
-return { ok: true, value: { kind: "running", boundAddress, lockedSender } }
+return { ok: true, value: { kind: "running", boundAddress, lastSender } }
 }
 case "error":
 return typeof value.message === "string"

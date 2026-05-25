@@ -47,7 +47,7 @@ app-dev:
 
 test:
 	$(MAKE) -C nds test
-	cargo test --manifest-path pc/Cargo.toml
+	cargo test --manifest-path Cargo.toml
 	pnpm --dir pc/app build
 
 clean:
