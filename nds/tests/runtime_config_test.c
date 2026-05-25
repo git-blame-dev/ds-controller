@@ -44,11 +44,33 @@ static void rejects_invalid_values(void) {
     assert(ds_controller_runtime_config_parse(&config, "pc_ip=192.168.1.50\nfoo=bar\npc_port=26760\n") != 0);
 }
 
+static void derives_config_path_from_rom_path(void) {
+    char path[128];
+
+    assert(ds_controller_runtime_config_path_for_rom(path, sizeof(path),
+                                                     "fat:/ds-controller/ds-controller.nds"));
+    assert(strcmp(path, "fat:/ds-controller/ds-controller.ini") == 0);
+
+    assert(ds_controller_runtime_config_path_for_rom(path, sizeof(path), "ds-controller.nds"));
+    assert(strcmp(path, "ds-controller.ini") == 0);
+}
+
+static void rejects_missing_or_too_long_rom_path(void) {
+    char path[8];
+
+    assert(!ds_controller_runtime_config_path_for_rom(path, sizeof(path), NULL));
+    assert(!ds_controller_runtime_config_path_for_rom(path, sizeof(path), ""));
+    assert(!ds_controller_runtime_config_path_for_rom(path, sizeof(path),
+                                                      "fat:/ds-controller/ds-controller.nds"));
+}
+
 int main(void) {
     parses_valid_config();
     uses_build_defaults();
     allows_comments_and_spacing();
     rejects_missing_values();
     rejects_invalid_values();
+    derives_config_path_from_rom_path();
+    rejects_missing_or_too_long_rom_path();
     return 0;
 }

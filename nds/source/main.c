@@ -45,10 +45,7 @@ static void print_status(const ds_controller_runtime_config_t *config) {
 }
 
 static bool run_controller(const ds_controller_runtime_config_t *config,
-                           ds_controller_config_load_result_t load_result) {
-    ds_controller_display_init();
-
-    iprintf("DS Controller\n");
+                            ds_controller_config_load_result_t load_result) {
     print_config_load_status(load_result);
     iprintf("Target: %s:%u\n", config->pc_ip, config->pc_port);
     iprintf("Connecting Wi-Fi...\n");
@@ -86,9 +83,17 @@ static bool run_controller(const ds_controller_runtime_config_t *config,
     return false;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    ds_controller_display_init();
+    iprintf("DS Controller\n");
+    iprintf("Waiting for display service...\n");
+    ds_controller_display_init_power_control();
+    iprintf("Mounting flashcart FAT...\n");
+    iprintf("Config: beside ROM, /ds-controller, /\n");
+
     ds_controller_runtime_config_t config;
-    const ds_controller_config_load_result_t load_result = ds_controller_runtime_config_load(&config);
+    const char *rom_path = argc > 0 ? argv[0] : NULL;
+    const ds_controller_config_load_result_t load_result = ds_controller_runtime_config_load(&config, rom_path);
 
     while (pmMainLoop()) {
         if (!run_controller(&config, load_result)) {

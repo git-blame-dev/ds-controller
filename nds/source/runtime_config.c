@@ -13,6 +13,7 @@
 #endif
 
 #define DS_CONTROLLER_CONFIG_MAX_BYTES 512u
+#define DS_CONTROLLER_CONFIG_MAX_PATH 192u
 
 static char *trim(char *value) {
     while (isspace((unsigned char)*value)) {
@@ -75,6 +76,38 @@ static bool parse_port(const char *value, uint16_t *out) {
     *out = (uint16_t)port;
     return true;
 }
+
+static bool config_path_for_rom(char *out, size_t out_len, const char *rom_path) {
+    if (rom_path == NULL || *rom_path == '\0') {
+        return false;
+    }
+
+    const char *last_slash = strrchr(rom_path, '/');
+    const char *last_backslash = strrchr(rom_path, '\\');
+    if (last_backslash != NULL && (last_slash == NULL || last_backslash > last_slash)) {
+        last_slash = last_backslash;
+    }
+
+    if (last_slash == NULL) {
+        const int written = snprintf(out, out_len, "%s", DS_CONTROLLER_CONFIG_FILE_NAME);
+        return written > 0 && (size_t)written < out_len;
+    }
+
+    const size_t dir_len = (size_t)(last_slash - rom_path) + 1u;
+    if (dir_len + strlen(DS_CONTROLLER_CONFIG_FILE_NAME) + 1u > out_len) {
+        return false;
+    }
+
+    memcpy(out, rom_path, dir_len);
+    strcpy(out + dir_len, DS_CONTROLLER_CONFIG_FILE_NAME);
+    return true;
+}
+
+#ifdef DS_CONTROLLER_HOST_TEST
+bool ds_controller_runtime_config_path_for_rom(char *out, size_t out_len, const char *rom_path) {
+    return config_path_for_rom(out, out_len, rom_path);
+}
+#endif
 
 void ds_controller_runtime_config_default(ds_controller_runtime_config_t *config) {
     snprintf(config->pc_ip, sizeof(config->pc_ip), "%s", DS_CONTROLLER_PC_IP);
@@ -146,26 +179,37 @@ int ds_controller_runtime_config_parse(ds_controller_runtime_config_t *config, c
     return 0;
 }
 
-ds_controller_config_load_result_t ds_controller_runtime_config_load(ds_controller_runtime_config_t *config) {
+ds_controller_config_load_result_t ds_controller_runtime_config_load(ds_controller_runtime_config_t *config,
+                                                                     const char *rom_path) {
     ds_controller_runtime_config_default(config);
 
 #ifdef DS_CONTROLLER_HOST_TEST
+    (void)rom_path;
     return DS_CONTROLLER_CONFIG_LOAD_DEFAULT;
 #else
     if (!fatInitDefault()) {
         return DS_CONTROLLER_CONFIG_LOAD_DEFAULT;
     }
 
-    static const char *CONFIG_PATHS[] = {
-        "ds-controller.ini",
-        "/ds-controller.ini",
-        "/ds-controller/ds-controller.ini",
+    char buffer[DS_CONTROLLER_CONFIG_MAX_BYTES + 1u];
+    char same_dir_path[DS_CONTROLLER_CONFIG_MAX_PATH];
+    const char *paths[] = {
+        NULL,
+        DS_CONTROLLER_CONFIG_DIR_PATH,
+        DS_CONTROLLER_CONFIG_ROOT_PATH,
     };
 
-    char buffer[DS_CONTROLLER_CONFIG_MAX_BYTES + 1u];
+    if (config_path_for_rom(same_dir_path, sizeof(same_dir_path), rom_path)) {
+        paths[0] = same_dir_path;
+    }
+
     bool found_invalid_config = false;
-    for (size_t index = 0; index < sizeof(CONFIG_PATHS) / sizeof(CONFIG_PATHS[0]); index++) {
-        FILE *file = fopen(CONFIG_PATHS[index], "rb");
+    for (size_t index = 0; index < sizeof(paths) / sizeof(paths[0]); index++) {
+        if (paths[index] == NULL) {
+            continue;
+        }
+
+        FILE *file = fopen(paths[index], "rb");
         if (file == NULL) {
             continue;
         }

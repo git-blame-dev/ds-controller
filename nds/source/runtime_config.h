@@ -2,9 +2,13 @@
 #define DS_CONTROLLER_RUNTIME_CONFIG_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define DS_CONTROLLER_RUNTIME_CONFIG_IP_MAX 16u
+#define DS_CONTROLLER_CONFIG_FILE_NAME "ds-controller.ini"
+#define DS_CONTROLLER_CONFIG_DIR_PATH "fat:/ds-controller/ds-controller.ini"
+#define DS_CONTROLLER_CONFIG_ROOT_PATH "fat:/ds-controller.ini"
 
 typedef struct {
     char pc_ip[DS_CONTROLLER_RUNTIME_CONFIG_IP_MAX];
@@ -20,6 +24,11 @@ typedef enum {
 
 void ds_controller_runtime_config_default(ds_controller_runtime_config_t *config);
 int ds_controller_runtime_config_parse(ds_controller_runtime_config_t *config, const char *text);
-ds_controller_config_load_result_t ds_controller_runtime_config_load(ds_controller_runtime_config_t *config);
+ds_controller_config_load_result_t ds_controller_runtime_config_load(ds_controller_runtime_config_t *config,
+                                                                     const char *rom_path);
+
+#ifdef DS_CONTROLLER_HOST_TEST
+bool ds_controller_runtime_config_path_for_rom(char *out, size_t out_len, const char *rom_path);
+#endif
 
 #endif

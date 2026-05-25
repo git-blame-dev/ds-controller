@@ -35,11 +35,14 @@ static void apply_screen_power(void) {
 
 void ds_controller_display_init(void) {
     consoleDemoInit();
-    pxiWaitRemote(PxiChannel_User0);
-    send_backlight_command(DS_CONTROLLER_BACKLIGHT_TOP_OFF);
     bottom_backlight_on = true;
     ds_controller_display_clear();
     ds_controller_display_policy_init(&display_policy);
+}
+
+void ds_controller_display_init_power_control(void) {
+    pxiWaitRemote(PxiChannel_User0);
+    send_backlight_command(DS_CONTROLLER_BACKLIGHT_TOP_OFF);
     apply_screen_power();
 }
 
