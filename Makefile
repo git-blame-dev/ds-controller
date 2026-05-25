@@ -3,6 +3,9 @@
 WINDOWS_TARGET := x86_64-pc-windows-msvc
 DEVKITARM_IMAGE ?= devkitpro/devkitarm:20260221@sha256:4debd5b33cf4361a557b6bf3be5ff823804868125ce1429912f1a4e773e7ac5d
 DOCKER_USER := $(shell id -u):$(shell id -g)
+PC_CARGO_TARGET_DIR ?= $(abspath $(CURDIR)/../pc/target)
+PC_BUILD_RELEASE_DIR := $(PC_CARGO_TARGET_DIR)/$(WINDOWS_TARGET)/release
+PC_OUTPUT_RELEASE_DIR := $(CURDIR)/pc/target/$(WINDOWS_TARGET)/release
 PC_PORT ?= 26760
 
 -include build.mk
@@ -39,8 +42,20 @@ pc:
 	@command -v cargo-xwin >/dev/null || { printf '%s\n' 'Missing cargo-xwin. Install with: cargo install cargo-xwin' >&2; exit 1; }
 	@command -v llvm-rc >/dev/null || { printf '%s\n' 'Missing llvm-rc. Install LLVM tools before running make pc.' >&2; exit 1; }
 	@command -v lld-link >/dev/null || { printf '%s\n' 'Missing lld-link. Install lld before running make pc.' >&2; exit 1; }
-	pnpm --dir pc/app tauri build --runner "$(CURDIR)/scripts/cargo-xwin-runner.sh" --target $(WINDOWS_TARGET) --no-bundle
-	@printf 'Windows GUI app: %s\n' "$(CURDIR)/pc/target/$(WINDOWS_TARGET)/release/ds-controller.exe"
+	CARGO_TARGET_DIR="$(PC_CARGO_TARGET_DIR)" pnpm --dir pc/app tauri build --runner "$(CURDIR)/scripts/cargo-xwin-runner.sh" --target $(WINDOWS_TARGET) --no-bundle
+	@mkdir -p "$(PC_OUTPUT_RELEASE_DIR)"
+	@cp "$(PC_BUILD_RELEASE_DIR)/ds-controller.exe" "$(PC_OUTPUT_RELEASE_DIR)/ds-controller.exe"
+	@web_view_loader=; \
+	for candidate in "$(PC_BUILD_RELEASE_DIR)"/build/webview2-com-sys-*/out/x64/WebView2Loader.dll; do \
+		if [ -e "$$candidate" ]; then web_view_loader="$$candidate"; break; fi; \
+	done; \
+	if [ -z "$$web_view_loader" ]; then \
+		printf '%s\n' 'WebView2Loader.dll was not produced by webview2-com-sys' >&2; \
+		exit 1; \
+	fi; \
+	cp "$$web_view_loader" "$(PC_OUTPUT_RELEASE_DIR)/WebView2Loader.dll"
+	@printf 'Windows GUI app: %s\n' "$(PC_OUTPUT_RELEASE_DIR)/ds-controller.exe"
+	@printf 'WebView2 loader: %s\n' "$(PC_OUTPUT_RELEASE_DIR)/WebView2Loader.dll"
 
 app-dev:
 	pnpm --dir pc/app tauri dev
