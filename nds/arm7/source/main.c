@@ -1,6 +1,7 @@
 #include <nds.h>
 
 #include <calico/nds/arm7/pmic.h>
+#include <calico/dev/blk.h>
 #include <stdbool.h>
 
 #include "backlight.h"
@@ -77,6 +78,7 @@ int main(void) {
     touchStartServer(80, MAIN_THREAD_PRIO);
 
     wlmgrStartServer(MAIN_THREAD_PRIO - 8);
+    blkInit();
 
     threadPrepare(&backlight_thread, backlight_thread_main, NULL,
                   &backlight_thread_stack[sizeof(backlight_thread_stack)], MAIN_THREAD_PRIO);
