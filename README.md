@@ -63,7 +63,6 @@ Key directories:
 - `nds/` - Nintendo DS sender, homebrew build files, DS-side config example, and host-side tests.
 - `pc/receiver/` - Rust receiver logic for UDP packet handling and controller output boundaries.
 - `pc/app/` - Tauri/React desktop dashboard for receiver status, controls, and logs.
-- `scripts/` - build and packaging helpers for the Linux-first Windows app workflow.
 
 ## 🚀 Getting Started
 
@@ -144,6 +143,14 @@ Cross-build the Windows PC GUI app from Linux:
 make pc
 ```
 
+To stage both local artifacts in the same layout used by CI:
+
+```sh
+make dist
+```
+
+The staged Windows app files land in `dist/pc/`; the staged DS files land in `dist/nds/`.
+
 `make pc` requires LLVM tools, `cargo-xwin`, and the Windows MSVC Rust target:
 
 ```sh
@@ -163,9 +170,9 @@ sudo pacman -S --needed clang lld llvm
 
 ### Run
 
-Copy `ds-controller.exe` and the matching `WebView2Loader.dll` to the same folder on the Windows PC, then run `ds-controller.exe`. The receiver starts automatically when **Start receiver when app opens** is enabled. You can change the UDP port, use **Apply & Restart**, and view receiver logs in the app.
+Copy `dist/pc/ds-controller.exe` and `dist/pc/WebView2Loader.dll` to the same folder on the Windows PC, then run `ds-controller.exe`. The receiver starts automatically when **Start receiver when app opens** is enabled. You can change the UDP port, use **Apply & Restart**, and view receiver logs in the app.
 
-Then launch `nds/build/ds-controller.nds` on the DS.
+Then launch `dist/nds/ds-controller.nds` on the DS.
 
 The DS screen shows Wi-Fi connection progress. After connecting, the top screen turns off and the bottom screen stays off until touched. Touch wakes the status screen briefly; normal button input does not wake it.
 
@@ -183,9 +190,9 @@ For a manual PC GUI smoke check, run the app in development mode:
 make app-dev
 ```
 
-Lean local workflow: `make test` validates the code; `make pc` produces the Windows executable.
+Lean local workflow: `make test` validates the code; `make dist` stages the Windows app and DS ROM artifacts.
 
-CI runs `make test`, cross-builds the Windows PC app with `make pc`, and builds the NDS ROM; real DS / Windows hardware behavior is still manual validation.
+CI runs `make test`, cross-builds the Windows PC app, builds the NDS ROM, and stages artifacts under `dist/pc` and `dist/nds`; real DS / Windows hardware behavior is still manual validation.
 
 The DS host tests cover packet encoding, input mapping, and display wake policy. Hardware behavior such as Wi-Fi association, backlight control, WebView2 startup, ViGEmBus integration, firewall prompts, and XInput output still requires real DS / Windows hardware.
 
@@ -195,11 +202,11 @@ The DS host tests cover packet encoding, input mapping, and display wake policy.
 
 For local builds and manual Windows testing, artifacts are staged at:
 
-- DS ROM: `nds/build/ds-controller.nds`
-- Windows executable: `pc/target/x86_64-pc-windows-msvc/release/ds-controller.exe`
-- WebView2 loader DLL: `pc/target/x86_64-pc-windows-msvc/release/build/webview2-com-sys-*/out/x64/WebView2Loader.dll`
+- DS files: `dist/nds/`
+- Windows executable: `dist/pc/ds-controller.exe`
+- WebView2 loader DLL: `dist/pc/WebView2Loader.dll`
 
-When testing manually on Windows, copy `ds-controller.exe` and `WebView2Loader.dll` into the same folder. CI runs the same Linux-first `make test` / `make pc` workflow and stages both files in the `ds-controller-pc-app` artifact.
+When testing manually on Windows, keep `ds-controller.exe` and `WebView2Loader.dll` together in the same folder. CI runs the same Linux-first test/build flow and uploads the staged `dist/pc` and `dist/nds` artifacts.
 
 ## ⚠️ Limitations
 
