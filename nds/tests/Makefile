@@ -5,15 +5,18 @@ PROTOCOL_SOURCES := protocol_test.c ../source/protocol.c ../source/input.c
 PROTOCOL_TARGET := ../build/tests/protocol_test
 DISPLAY_POLICY_SOURCES := display_policy_test.c ../source/display_policy.c
 DISPLAY_POLICY_TARGET := ../build/tests/display_policy_test
+SEND_POLICY_SOURCES := send_policy_test.c ../source/send_policy.c
+SEND_POLICY_TARGET := ../build/tests/send_policy_test
 RUNTIME_CONFIG_SOURCES := runtime_config_test.c ../source/runtime_config.c
 RUNTIME_CONFIG_TARGET := ../build/tests/runtime_config_test
-TARGETS := $(PROTOCOL_TARGET) $(DISPLAY_POLICY_TARGET) $(RUNTIME_CONFIG_TARGET)
+TARGETS := $(PROTOCOL_TARGET) $(DISPLAY_POLICY_TARGET) $(SEND_POLICY_TARGET) $(RUNTIME_CONFIG_TARGET)
 
 .PHONY: test clean
 
 test: $(TARGETS)
 	./$(PROTOCOL_TARGET)
 	./$(DISPLAY_POLICY_TARGET)
+	./$(SEND_POLICY_TARGET)
 	./$(RUNTIME_CONFIG_TARGET)
 
 $(PROTOCOL_TARGET): $(PROTOCOL_SOURCES)
@@ -23,6 +26,10 @@ $(PROTOCOL_TARGET): $(PROTOCOL_SOURCES)
 $(DISPLAY_POLICY_TARGET): $(DISPLAY_POLICY_SOURCES)
 	mkdir -p ../build/tests
 	$(CC) $(CFLAGS) -I../source $(DISPLAY_POLICY_SOURCES) -o $(DISPLAY_POLICY_TARGET)
+
+$(SEND_POLICY_TARGET): $(SEND_POLICY_SOURCES)
+	mkdir -p ../build/tests
+	$(CC) $(CFLAGS) -I../source $(SEND_POLICY_SOURCES) -o $(SEND_POLICY_TARGET)
 
 $(RUNTIME_CONFIG_TARGET): $(RUNTIME_CONFIG_SOURCES)
 	mkdir -p ../build/tests
