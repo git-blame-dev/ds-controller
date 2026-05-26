@@ -9,12 +9,12 @@
 #include "network.h"
 #include "protocol.h"
 #include "runtime_config.h"
+#include "send_policy.h"
 
 #define RETRY_DELAY_FRAMES (60u * 2u)
 
 static void send_controller_packet(ds_controller_network_t *network, ds_controller_packet_t *packet,
-                                   uint32_t *sequence) {
-    const uint16_t buttons = ds_controller_buttons_from_keys(keysHeld());
+                                   uint32_t *sequence, uint16_t buttons) {
     ds_controller_encode_packet(packet, (*sequence)++, buttons);
     (void)ds_controller_network_send(network, packet->bytes, sizeof(packet->bytes));
 }
@@ -70,13 +70,18 @@ static bool run_controller(const ds_controller_runtime_config_t *config,
 
     uint32_t sequence = 0;
     ds_controller_packet_t packet;
+    ds_controller_send_policy_t send_policy;
+    ds_controller_send_policy_init(&send_policy);
 
     while (pmMainLoop()) {
         swiWaitForVBlank();
         scanKeys();
 
+        const uint16_t buttons = ds_controller_buttons_from_keys(keysHeld());
         ds_controller_display_update(keysDown());
-        send_controller_packet(&network, &packet, &sequence);
+        if (ds_controller_send_policy_should_send(&send_policy, buttons)) {
+            send_controller_packet(&network, &packet, &sequence, buttons);
+        }
     }
 
     ds_controller_network_close(&network);
