@@ -1,5 +1,6 @@
 build.mk
 dist/
+package/
 pc/target/
 target/
 nds/build/

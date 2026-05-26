@@ -4,7 +4,17 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - .gitignore
+      - README.md
+      - demo.webp
+      - docs/**
   pull_request:
+    paths-ignore:
+      - .gitignore
+      - README.md
+      - demo.webp
+      - docs/**
   workflow_dispatch:
 
 permissions:
@@ -16,6 +26,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_XWIN_VERSION: 0.22.0
 
 jobs:
   workflow-lint:
@@ -74,8 +85,18 @@ jobs:
             . -> target
             pc -> target
 
+      - name: Cache cargo-xwin
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/cargo-xwin
+          key: cargo-xwin-${{ runner.os }}-${{ env.CARGO_XWIN_VERSION }}
+
       - name: Install cargo-xwin
-        run: cargo install cargo-xwin --locked
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        run: |
+          command -v cargo-xwin >/dev/null || cargo install cargo-xwin --locked --version "${CARGO_XWIN_VERSION}"
+          cargo-xwin --version
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -93,12 +114,19 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Run deterministic tests
+        if: github.event_name != 'workflow_dispatch' && !(github.event_name == 'push' && github.ref == 'refs/heads/main')
         run: make test
 
+      - name: Run package prerequisite tests
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        run: make test-ci-package-prereqs
+
       - name: Build and stage Windows release files
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         run: make pc-dist
 
       - name: Upload Windows portable app
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         uses: actions/upload-artifact@v7
         with:
           name: ds-controller-pc-app
@@ -111,6 +139,7 @@ jobs:
     name: NDS ROM build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     env:
       DEVKITARM_IMAGE: devkitpro/devkitarm:20260221@sha256:4debd5b33cf4361a557b6bf3be5ff823804868125ce1429912f1a4e773e7ac5d
 

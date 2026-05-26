@@ -15,7 +15,7 @@ PC_IP ?= 192.0.2.1
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all nds nds-local pc pc-dist nds-dist dist app-dev test clean
+.PHONY: help all nds nds-local pc pc-dist nds-dist dist app-dev test test-ci-package-prereqs clean
 
 help:
 	@printf '%s\n' 'Targets:'
@@ -81,6 +81,11 @@ test:
 	cargo test --manifest-path Cargo.toml
 	pnpm --dir pc/app build
 
+test-ci-package-prereqs:
+	$(MAKE) -C nds test
+	cargo test --manifest-path Cargo.toml
+
 clean:
 	$(MAKE) -C nds clean
 	cargo clean
+	rm -rf "$(CURDIR)/dist" "$(CURDIR)/package" "$(CURDIR)/pc/target" "$(CURDIR)/pc/app/dist" "$(CURDIR)/pc/app/.vite" "$(CURDIR)/pc/app/src-tauri/gen"
