@@ -49,6 +49,10 @@ impl Buttons {
         self.0 & button.0 != 0
     }
 
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
     #[cfg(test)]
     pub fn raw(self) -> u16 {
         self.0

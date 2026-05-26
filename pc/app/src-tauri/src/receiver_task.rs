@@ -262,6 +262,7 @@ fn run_receiver_worker(
     emit_log(&app, LogLevel::Info, "virtual controller ready");
 
     let mut packet_count = 0;
+    let mut receiver_session_state = ReceiverSessionState::default();
 
     loop {
         if stop_rx.try_recv().is_ok() {
@@ -279,12 +280,17 @@ fn run_receiver_worker(
             Ok(ReceiverEvent::State { sender, state }) => {
                 let output = map_ds_to_xbox(state);
                 packet_count += 1;
-                if let Err(error) = backend.update(output) {
-                    emit_log(
-                        &app,
-                        LogLevel::Error,
-                        format!("controller update failed: {error}"),
-                    );
+                match backend.update(output) {
+                    Ok(()) => {
+                        receiver_session_state.record_update(state.buttons);
+                    }
+                    Err(error) => {
+                        emit_log(
+                            &app,
+                            LogLevel::Error,
+                            format!("controller update failed: {error}"),
+                        );
+                    }
                 }
 
                 let pressed_buttons = button_names(state);
@@ -315,13 +321,31 @@ fn run_receiver_worker(
                 }
             }
             Ok(ReceiverEvent::Timeout) => {
-                if let Err(error) = backend.neutral() {
-                    emit_log(
-                        &app,
-                        LogLevel::Error,
-                        format!("neutral controller update failed: {error}"),
-                    );
+                let needs_timeout_release = receiver_session_state.needs_timeout_release();
+                let mut timeout_release_succeeded = false;
+
+                if needs_timeout_release {
+                    match backend.neutral() {
+                        Ok(()) => {
+                            receiver_session_state.record_neutral();
+                            timeout_release_succeeded = true;
+                        }
+                        Err(error) => {
+                            if receiver_session_state.record_timeout_release_error() {
+                                emit_log(
+                                    &app,
+                                    LogLevel::Error,
+                                    format!("neutral controller update failed: {error}"),
+                                );
+                            }
+                        }
+                    }
                 }
+
+                if !receiver_session_state.needs_timeout_status() {
+                    continue;
+                }
+
                 set_status(
                     &app,
                     &status,
@@ -336,12 +360,57 @@ fn run_receiver_worker(
                         last_packet_at: None,
                     },
                 );
-                emit_log(&app, LogLevel::Info, "receiver timeout: release all inputs");
+                receiver_session_state.record_timeout_status();
+
+                if timeout_release_succeeded {
+                    emit_log(&app, LogLevel::Info, "receiver timeout: release all inputs");
+                }
             }
             Err(error) => {
                 emit_log(&app, LogLevel::Error, format!("receiver error: {error}"));
             }
         }
+    }
+}
+
+#[derive(Default)]
+struct ReceiverSessionState {
+    has_pressed_inputs: bool,
+    timeout_status_reported: bool,
+    timeout_release_error_reported: bool,
+}
+
+impl ReceiverSessionState {
+    fn record_update(&mut self, buttons: Buttons) {
+        self.has_pressed_inputs = !buttons.is_empty();
+        self.timeout_status_reported = false;
+        self.timeout_release_error_reported = false;
+    }
+
+    fn record_neutral(&mut self) {
+        self.has_pressed_inputs = false;
+        self.timeout_release_error_reported = false;
+    }
+
+    fn needs_timeout_release(&self) -> bool {
+        self.has_pressed_inputs
+    }
+
+    fn needs_timeout_status(&self) -> bool {
+        !self.timeout_status_reported
+    }
+
+    fn record_timeout_status(&mut self) {
+        self.timeout_status_reported = true;
+    }
+
+    fn record_timeout_release_error(&mut self) -> bool {
+        if self.timeout_release_error_reported {
+            return false;
+        }
+
+        self.timeout_release_error_reported = true;
+        true
     }
 }
 
@@ -385,4 +454,98 @@ fn button_names(state: ControllerState) -> Vec<String> {
         .filter(|(button, _name)| state.buttons.contains(*button))
         .map(|(_button, name)| name.to_owned())
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn neutral_backend_state_does_not_need_timeout_release() {
+        let state = ReceiverSessionState::default();
+
+        assert!(!state.needs_timeout_release());
+    }
+
+    #[test]
+    fn pressed_backend_state_needs_timeout_release() {
+        let mut state = ReceiverSessionState::default();
+
+        state.record_update(Buttons::A);
+
+        assert!(state.needs_timeout_release());
+    }
+
+    #[test]
+    fn neutral_update_clears_timeout_release_need() {
+        let mut state = ReceiverSessionState::default();
+        state.record_update(Buttons::A);
+
+        state.record_update(Buttons::default());
+
+        assert!(!state.needs_timeout_release());
+    }
+
+    #[test]
+    fn timeout_release_remains_pending_until_neutral_is_recorded() {
+        let mut state = ReceiverSessionState::default();
+        state.record_update(Buttons::A);
+
+        assert!(state.needs_timeout_release());
+    }
+
+    #[test]
+    fn timeout_status_does_not_clear_pending_release() {
+        let mut state = ReceiverSessionState::default();
+        state.record_update(Buttons::A);
+
+        state.record_timeout_status();
+
+        assert!(state.needs_timeout_release());
+        assert!(!state.needs_timeout_status());
+    }
+
+    #[test]
+    fn timeout_release_error_is_reported_once_until_next_update() {
+        let mut state = ReceiverSessionState::default();
+        state.record_update(Buttons::A);
+
+        assert!(state.record_timeout_release_error());
+        assert!(!state.record_timeout_release_error());
+
+        state.record_update(Buttons::A);
+
+        assert!(state.record_timeout_release_error());
+    }
+
+    #[test]
+    fn successful_timeout_release_clears_release_need() {
+        let mut state = ReceiverSessionState::default();
+        state.record_update(Buttons::A);
+
+        state.record_neutral();
+
+        assert!(!state.needs_timeout_release());
+        assert!(state.record_timeout_release_error());
+    }
+
+    #[test]
+    fn neutral_backend_state_still_needs_timeout_status_once() {
+        let state = ReceiverSessionState::default();
+
+        assert!(state.needs_timeout_status());
+    }
+
+    #[test]
+    fn timeout_status_is_suppressed_until_next_update() {
+        let mut state = ReceiverSessionState::default();
+
+        state.record_timeout_status();
+
+        assert!(!state.needs_timeout_status());
+
+        state.record_update(Buttons::default());
+
+        assert!(state.needs_timeout_status());
+    }
 }

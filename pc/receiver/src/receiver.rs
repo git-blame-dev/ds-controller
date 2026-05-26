@@ -52,7 +52,6 @@ impl From<protocol::ParseError> for ReceiverError {
 pub struct Receiver {
     socket: UdpSocket,
     latest_sequence: Option<u32>,
-    timed_out: bool,
 }
 
 impl Receiver {
@@ -63,7 +62,6 @@ impl Receiver {
         Ok(Self {
             socket,
             latest_sequence: None,
-            timed_out: false,
         })
     }
 
@@ -79,7 +77,6 @@ impl Receiver {
                         continue;
                     }
 
-                    self.timed_out = false;
                     return Ok(ReceiverEvent::State { sender, state });
                 }
                 Err(error)
@@ -88,11 +85,6 @@ impl Receiver {
                         io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
                     ) =>
                 {
-                    if self.timed_out {
-                        continue;
-                    }
-
-                    self.timed_out = true;
                     self.latest_sequence = None;
                     return Ok(ReceiverEvent::Timeout);
                 }
@@ -266,13 +258,17 @@ mod tests {
     }
 
     #[test]
-    fn emits_timeout_once_then_resumes_on_valid_packet() {
+    fn emits_repeated_timeouts_then_resumes_on_valid_packet() {
         let mut receiver = bind_receiver(receiver_config());
         let sender = bind_sender();
         let expected = state(1, Buttons::START);
 
         assert_eq!(
             receiver.next_event().expect("timeout event"),
+            ReceiverEvent::Timeout
+        );
+        assert_eq!(
+            receiver.next_event().expect("second timeout event"),
             ReceiverEvent::Timeout
         );
 
