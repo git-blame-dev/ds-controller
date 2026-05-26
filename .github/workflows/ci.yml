@@ -71,8 +71,8 @@ jobs:
         with:
           shared-key: rust-${{ runner.os }}
           workspaces: |
-            pc/receiver -> target
-            pc/app/src-tauri -> target
+            . -> target
+            pc -> target
 
       - name: Install cargo-xwin
         run: cargo install cargo-xwin --locked
@@ -95,22 +95,8 @@ jobs:
       - name: Run deterministic tests
         run: make test
 
-      - name: Cross-build Windows portable app
-        run: make pc
-
-      - name: Stage Windows release files
-        shell: bash
-        run: |
-          mkdir -p dist/pc
-          cp pc/target/x86_64-pc-windows-msvc/release/ds-controller.exe dist/pc/ds-controller.exe
-
-          if [ ! -e pc/target/x86_64-pc-windows-msvc/release/WebView2Loader.dll ]; then
-            printf '%s\n' 'WebView2Loader.dll was not staged by make pc' >&2
-            exit 1
-          fi
-          cp pc/target/x86_64-pc-windows-msvc/release/WebView2Loader.dll dist/pc/WebView2Loader.dll
-
-          ls -l dist/pc
+      - name: Build and stage Windows release files
+        run: make pc-dist
 
       - name: Upload Windows portable app
         uses: actions/upload-artifact@v7
@@ -132,14 +118,8 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Build NDS ROM
-        run: make nds DEVKITARM_IMAGE="$DEVKITARM_IMAGE" PC_IP=192.0.2.1 PC_PORT=26760
-
-      - name: Stage NDS release files
-        run: |
-          mkdir -p dist/nds
-          cp nds/build/ds-controller.nds dist/nds/ds-controller.nds
-          cp nds/ds-controller.ini dist/nds/ds-controller.ini
+      - name: Build and stage NDS release files
+        run: make nds-dist DEVKITARM_IMAGE="$DEVKITARM_IMAGE" PC_IP=192.0.2.1 PC_PORT=26760
 
       - name: Upload NDS release files
         uses: actions/upload-artifact@v7
