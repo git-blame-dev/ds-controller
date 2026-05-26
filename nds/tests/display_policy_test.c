@@ -19,6 +19,13 @@ static void bottom_screen_starts_off(void) {
     expect_bool("bottom starts off", ds_controller_display_policy_bottom_on(&policy), false);
 }
 
+static void bottom_screen_wake_timeout_is_three_seconds(void) {
+    if (DS_CONTROLLER_DISPLAY_WAKE_FRAMES != 60 * 3) {
+        printf("FAIL bottom wake timeout: got %d expected %d\n", DS_CONTROLLER_DISPLAY_WAKE_FRAMES, 60 * 3);
+        failures++;
+    }
+}
+
 static void touch_wakes_bottom_screen(void) {
     ds_controller_display_policy_t policy;
     ds_controller_display_policy_init(&policy);
@@ -66,6 +73,7 @@ static void repeated_touch_extends_timeout(void) {
 }
 
 int main(void) {
+    bottom_screen_wake_timeout_is_three_seconds();
     bottom_screen_starts_off();
     touch_wakes_bottom_screen();
     normal_buttons_do_not_wake_bottom_screen();

@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 enum {
-    DS_CONTROLLER_DISPLAY_WAKE_FRAMES = 60 * 5,
+    DS_CONTROLLER_DISPLAY_WAKE_FRAMES = 60 * 3,
 };
 
 typedef struct {
