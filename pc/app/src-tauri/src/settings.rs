@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_PORT: u16 = 26_760;
-pub const DEFAULT_TIMEOUT_MS: u64 = 150;
+pub const DEFAULT_TIMEOUT_MS: u64 = 75;
+const LEGACY_DEFAULT_TIMEOUT_MS: u64 = 150;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +67,12 @@ impl Default for AppSettings {
     }
 }
 
+fn migrate_settings(settings: &mut AppSettings) {
+    if settings.timeout_ms == LEGACY_DEFAULT_TIMEOUT_MS {
+        settings.timeout_ms = DEFAULT_TIMEOUT_MS;
+    }
+}
+
 pub fn settings_path(config_dir: &Path) -> PathBuf {
     config_dir.join("settings.json")
 }
@@ -76,7 +83,8 @@ pub fn load_settings(config_dir: &Path) -> Result<AppSettings, SettingsError> {
         return Ok(AppSettings::default());
     }
 
-    let settings = serde_json::from_slice::<AppSettings>(&fs::read(path)?)?;
+    let mut settings = serde_json::from_slice::<AppSettings>(&fs::read(path)?)?;
+    migrate_settings(&mut settings);
     settings.validate().map_err(|message| {
         SettingsError::Serde(serde_json::Error::io(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -114,6 +122,19 @@ mod tests {
         assert_eq!(settings.port, DEFAULT_PORT);
         assert!(settings.start_receiver_when_app_opens);
         assert!(!settings.packet_logging_enabled);
+        assert_eq!(DEFAULT_TIMEOUT_MS, 75);
+        assert_eq!(settings.timeout_ms, DEFAULT_TIMEOUT_MS);
+    }
+
+    #[test]
+    fn migrates_legacy_default_timeout() {
+        let mut settings = AppSettings {
+            timeout_ms: LEGACY_DEFAULT_TIMEOUT_MS,
+            ..AppSettings::default()
+        };
+
+        migrate_settings(&mut settings);
+
         assert_eq!(settings.timeout_ms, DEFAULT_TIMEOUT_MS);
     }
 }

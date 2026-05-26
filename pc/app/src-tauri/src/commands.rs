@@ -37,6 +37,7 @@ pub fn save_settings(
             .lock()
             .map_err(|_| CommandErrorDto::state_unavailable())?;
         settings.packet_logging_enabled = current_settings.packet_logging_enabled;
+        settings.timeout_ms = current_settings.timeout_ms;
         settings::save_settings(&config_dir, &settings)
             .map_err(|error| CommandErrorDto::invalid_settings(error.to_string()))?;
         *current_settings = settings.clone();
