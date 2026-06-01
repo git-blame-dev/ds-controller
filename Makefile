@@ -79,6 +79,8 @@ app-dev:
 test:
 	$(MAKE) -C nds test
 	cargo test --manifest-path Cargo.toml
+	pnpm --dir pc/app lint
+	pnpm --dir pc/app test
 	pnpm --dir pc/app build
 
 test-ci-package-prereqs:
