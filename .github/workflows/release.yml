@@ -280,15 +280,15 @@ jobs:
             fi
 
             printf '\n## Artifacts\n\n'
-            printf -- "- Windows bundle: \`ds-controller-windows-${VERSION}.zip\`\n"
-            printf -- "- Ubuntu bundle: \`ds-controller-ubuntu-${VERSION}.zip\`\n"
+            printf -- "- Windows bundle: \`%s\`\n" "ds-controller-windows-${VERSION}.zip"
+            printf -- "- Ubuntu bundle: \`%s\`\n" "ds-controller-ubuntu-${VERSION}.zip"
             printf -- '- Both bundles include the Nintendo DS ROM and config example.\n'
-            printf -- '- The Ubuntu bundle contains the installable `ds-controller-linux-amd64.deb`.\n'
-            printf -- "- Checksums: \`SHA256SUMS\`\n"
+            printf '%s\n' "- The Ubuntu bundle contains the installable \`ds-controller-linux-amd64.deb\`."
+            printf '%s\n' "- Checksums: \`SHA256SUMS\`"
 
             printf '\n## Packaging change\n\n'
             printf -- '- New releases use separate Windows and Ubuntu ZIPs.\n'
-            printf -- '- The previous generic ZIP and direct `.deb` asset are no longer published.\n'
+            printf '%s\n' "- The previous generic ZIP and direct \`.deb\` asset are no longer published."
             printf -- '- Older releases and their existing assets remain unchanged.\n'
 
             printf '\n## Verification\n\n'
