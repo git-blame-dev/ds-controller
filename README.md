@@ -5,40 +5,40 @@
 [![Windows app](https://img.shields.io/badge/Windows%20app-in%20release%20zip-0078D4)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 [![Nintendo DS ROM](https://img.shields.io/badge/DS%20ROM-in%20release%20zip-blue)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 
-Use a Nintendo DS or DS Lite as a Wi-Fi controller for most Windows PC games through virtual Xbox 360 controller output.
+Use a Nintendo DS or DS Lite as a Wi-Fi controller for PC games through a virtual game controller on Windows or Ubuntu.
 
 ![DS Controller receiver dashboard beside a Nintendo DS controlling a game over Wi-Fi](demo.webp)
 
 ## 🔎 Overview
 
-DS Controller turns original Nintendo DS-family hardware into a wireless game controller for Windows PC players who want to reuse real DS hardware with standard controller-compatible games. The DS homebrew app reads the handheld's buttons and sends compact UDP controller-state packets over Wi-Fi; the Windows receiver maps those packets to a ViGEm virtual Xbox 360 controller so compatible games see standard controller input.
+DS Controller turns original Nintendo DS-family hardware into a wireless PC game controller. The DS homebrew app reads the handheld's buttons and sends compact UDP controller-state packets over Wi-Fi; the desktop receiver maps those packets to a ViGEm virtual Xbox 360 controller on Windows or a `uinput` virtual gamepad on Ubuntu.
 
-The project includes both sides of the system: a Nintendo DS ROM for the sender and a portable dark desktop dashboard for the Windows receiver.
+The project includes both sides of the system: a Nintendo DS ROM for the sender and a dark desktop receiver dashboard for Windows and Ubuntu.
 
 ## ✨ Features
 
-- Use Nintendo DS / DS Lite buttons as Windows gamepad input over local Wi-Fi.
-- Output through a virtual Xbox 360 controller for broad XInput game compatibility.
+- Use Nintendo DS / DS Lite buttons as gamepad input over local Wi-Fi.
+- Output through ViGEm on Windows or the Linux `uinput` interface on Ubuntu.
 - Configure the receiver UDP port from the PC dashboard and restart the receiver without relaunching the app.
-- View receiver status, ViGEm status, packet debugging, and logs in one desktop window.
+- View receiver status, virtual-controller status, packet debugging, and logs in one desktop window.
 - Configure the DS target PC from `ds-controller.ini`, with build-time defaults available for fixed setups.
 - Keep the DS display mostly off during play; touch wakes the status screen briefly.
 
 ## 🛠️ Tech Stack
 
 - **Nintendo DS ROM:** C homebrew built with devkitPro, devkitARM, libnds, and dswifi.
-- **Windows receiver backend:** Rust, UDP socket handling, ViGEm virtual controller integration.
+- **PC receiver backend:** Rust, UDP socket handling, ViGEm on Windows, and `evdev`/`uinput` on Ubuntu.
 - **Desktop UI:** Tauri 2, React 19, TypeScript, Vite, and pnpm.
-- **Build / release tooling:** Make targets for deterministic tests, DS ROM builds, Dockerized devkitARM builds, and Linux-first Windows cross-builds.
+- **Build / release tooling:** Make targets for deterministic tests, DS ROM builds, Ubuntu Debian packages, and Linux-first Windows cross-builds.
 - **CI / artifacts:** GitHub Actions release workflow with Windows app files, the NDS ROM, and example configuration.
 
 ## 🧠 Engineering Highlights
 
 - Splits the system at a small UDP packet boundary: the DS only sends button state, while the PC owns filtering, timeout behavior, and virtual controller output.
-- Uses ViGEm to expose a virtual Xbox 360 controller, which targets Windows games that support XInput rather than requiring per-game keyboard mapping.
+- Uses ViGEm on Windows and `uinput` on Ubuntu to expose a standard virtual game controller instead of requiring per-game keyboard mapping.
 - Supports both runtime DS configuration via `ds-controller.ini` and optional build-time defaults through `build.mk` for flashcart workflows.
-- Keeps hardware-specific behavior explicit: Wi-Fi association, backlight control, and virtual controller runtime behavior still require real DS / Windows hardware to validate.
-- Uses a Linux-first workflow for deterministic checks and cross-building portable Windows receiver artifacts.
+- Keeps hardware-specific behavior explicit: Wi-Fi association, backlight control, and virtual-controller runtime behavior still require real DS and target-platform validation.
+- Uses a Linux-first workflow for deterministic checks, native Ubuntu packages, and cross-built Windows artifacts.
 
 ## 🏗️ Architecture
 
@@ -47,16 +47,16 @@ Nintendo DS / DS Lite
   buttons -> UDP packets at 60 Hz
         |
         v
-Windows PC receiver
-  parse -> filter -> timeout -> ViGEm virtual Xbox 360 output
+Windows or Ubuntu PC receiver
+  parse -> filter -> timeout -> ViGEm or uinput virtual controller
         |
         v
-Windows PC game using XInput
+PC game using platform controller input
 ```
 
 The DS sender is intentionally small: it connects to a DS-compatible Wi-Fi profile, reads button input, and sends controller packets to the configured PC LAN IP and UDP port.
 
-The Windows app receives packets, updates the dashboard, handles receiver lifecycle controls, and writes controller state through ViGEm. This means game compatibility depends on Windows, ViGEmBus, and whether the target game accepts Xbox 360 / XInput controllers.
+The desktop app receives packets, updates the dashboard, handles receiver lifecycle controls, and writes controller state through ViGEm on Windows or `uinput` on Ubuntu. Game compatibility still depends on the platform virtual-controller stack and the target game's controller support.
 
 Key directories:
 
@@ -72,15 +72,15 @@ Runtime:
 
 - Nintendo DS or DS Lite.
 - Flashcart or compatible homebrew loader.
-- Windows PC on the same LAN as the DS.
-- [ViGEmBus](https://github.com/nefarius/ViGEmBus/releases) installed on Windows.
+- Windows PC or Ubuntu 24.04 x86_64 PC on the same LAN as the DS.
+- [ViGEmBus](https://github.com/nefarius/ViGEmBus/releases) installed when using Windows.
 - DS-compatible 2.4 GHz Wi-Fi network.
 
 Build tooling:
 
 - Rust toolchain.
 - Node.js and pnpm for the Tauri GUI frontend.
-- Tauri 2 system prerequisites for Windows app builds.
+- Tauri 2 native dependencies for the target desktop platform.
 - `cargo-xwin` or native Windows tooling for Windows Rust validation.
 - [devkitPro](https://devkitpro.org/wiki/Getting_Started) with devkitARM, libnds, and dswifi for building the DS sender.
 - Docker for building the DS sender with the pinned devkitARM image used by CI.
@@ -104,7 +104,7 @@ pc_ip=192.168.1.50
 pc_port=26760
 ```
 
-Use [`nds/ds-controller.ini`](nds/ds-controller.ini) as a starting point. Set `pc_ip` to the Windows receiver PC's LAN IP address. Leave `pc_port` as `26760` unless that port is already in use or you changed the PC receiver port. If no config file is found, the ROM uses the build-time defaults.
+Use [`nds/ds-controller.ini`](nds/ds-controller.ini) as a starting point. Set `pc_ip` to the receiver PC's LAN IP address. Leave `pc_port` as `26760` unless that port is already in use or you changed the PC receiver port. If no config file is found, the ROM uses the build-time defaults.
 
 Optional build-time configuration:
 
@@ -123,6 +123,13 @@ PC_PORT := 26760
 
 ### Build locally
 
+On Ubuntu 24.04, install the native desktop build dependencies:
+
+```sh
+sudo apt install clang libayatana-appindicator3-dev libgtk-3-dev librsvg2-dev \
+  libwebkit2gtk-4.1-dev libxdo-dev lld llvm patchelf pkg-config
+```
+
 Install the PC app tooling once from the repo root:
 
 ```sh
@@ -137,19 +144,33 @@ make nds
 
 The default `make nds` target uses Docker with the same pinned devkitARM image as CI when devkitPro is not installed locally.
 
+Build the Ubuntu `.deb`:
+
+```sh
+make linux-dist
+```
+
+The package lands at `dist/linux/ds-controller-linux-amd64.deb`. Install it with:
+
+```sh
+sudo apt install ./dist/linux/ds-controller-linux-amd64.deb
+```
+
+Installation adds a udev rule that grants the active desktop user access to `/dev/uinput`. DS Controller itself runs as the normal user; do not run the GUI with `sudo`.
+
 Cross-build the Windows PC GUI app from Linux:
 
 ```sh
 make pc
 ```
 
-To stage both local artifacts in the same layout used by CI:
+To stage all three local release artifacts:
 
 ```sh
 make dist
 ```
 
-The staged Windows app files land in `dist/pc/`; the staged DS files land in `dist/nds/`.
+The staged Ubuntu package lands in `dist/linux/`, Windows app files land in `dist/pc/`, and DS files land in `dist/nds/`.
 
 `make pc` requires LLVM tools, `cargo-xwin`, and the Windows MSVC Rust target:
 
@@ -172,6 +193,18 @@ sudo pacman -S --needed clang lld llvm
 
 Copy `dist/pc/ds-controller.exe` and `dist/pc/WebView2Loader.dll` to the same folder on the Windows PC, then run `ds-controller.exe`. The receiver starts automatically when **Start receiver when app opens** is enabled. You can change the UDP port, use **Apply & Restart**, and view receiver logs in the app.
 
+On Ubuntu, install the `.deb` and launch **DS Controller** from the application menu or run `ds-controller`. The package configures `/dev/uinput` access, and the app creates a `DS Controller Virtual Gamepad` while the receiver is running.
+
+If UFW is active, allow the configured UDP port from the DS network. Replace the subnet and port if your LAN differs:
+
+```sh
+sudo ufw allow from 192.168.1.0/24 to any port 26760 proto udp comment 'DS Controller'
+```
+
+The package does not change firewall policy automatically.
+
+The udev rule persists across normal reboots, so the package only needs to be installed once. After uninstalling DS Controller, reboot once to clear any `/dev/uinput` access retained by the current desktop session.
+
 Then launch `dist/nds/ds-controller.nds` on the DS.
 
 The DS screen shows Wi-Fi connection progress. After connecting, the top screen turns off and the bottom screen stays off until touched. Touch wakes the status screen briefly; normal button input does not wake it.
@@ -190,23 +223,24 @@ For a manual PC GUI smoke check, run the app in development mode:
 make app-dev
 ```
 
-Lean local workflow: `make test` validates the code; `make dist` stages the Windows app and DS ROM artifacts.
+Lean local workflow: `make test` validates the code; `make linux-verify` builds and inspects the Ubuntu package; `make dist` stages all release artifacts.
 
-CI runs `make test`, cross-builds the Windows PC app, builds the NDS ROM, and stages artifacts under `dist/pc` and `dist/nds`; real DS / Windows hardware behavior is still manual validation.
+CI runs deterministic tests, cross-builds the Windows app, builds the NDS ROM, and stages artifacts under `dist/pc` and `dist/nds`.
 
-The DS host tests cover packet encoding, input mapping, and display wake policy. Hardware behavior such as Wi-Fi association, backlight control, WebView2 startup, ViGEmBus integration, firewall prompts, and XInput output still requires real DS / Windows hardware.
+The DS host tests cover packet encoding, input mapping, and display wake policy. Hardware behavior such as Wi-Fi association, backlight control, WebView2 startup, ViGEmBus integration, Linux game detection, firewall prompts, and real controller output still requires manual platform and DS validation.
 
 ## 📦 Releases / Artifacts
 
 [GitHub Releases](https://github.com/git-blame-dev/ds-controller/releases) publish a complete zip containing the Windows app files, NDS ROM, and `ds-controller.ini`.
 
-For local builds and manual Windows testing, artifacts are staged at:
+For local builds and manual testing, artifacts are staged at:
 
 - DS files: `dist/nds/`
+- Ubuntu package: `dist/linux/ds-controller-linux-amd64.deb`
 - Windows executable: `dist/pc/ds-controller.exe`
 - WebView2 loader DLL: `dist/pc/WebView2Loader.dll`
 
-When testing manually on Windows, keep `ds-controller.exe` and `WebView2Loader.dll` together in the same folder. CI runs the same Linux-first test/build flow and uploads the staged `dist/pc` and `dist/nds` artifacts.
+When testing manually on Windows, keep `ds-controller.exe` and `WebView2Loader.dll` together. On Ubuntu, install the `.deb` so its package-owned udev rule is applied. CI uploads the staged Windows and NDS artifact directories.
 
 ## ⚠️ Limitations
 
@@ -215,14 +249,16 @@ When testing manually on Windows, keep `ds-controller.exe` and `WebView2Loader.d
 - DS / DS Lite Wi-Fi requires open or WEP-era 2.4 GHz networking.
 - Do not connect open or WEP Wi-Fi to your main network; use an isolated network segment for DS testing.
 - ViGEmBus is required for virtual Xbox 360 output on Windows.
-- End-to-end hardware behavior still needs validation on an actual DS or DS Lite and a Windows PC with the built receiver.
+- Initial Linux package support is limited to Ubuntu 24.04 x86_64.
+- End-to-end behavior still needs validation on an actual DS or DS Lite and the target Windows or Ubuntu PC.
 
 ## 🧯 Troubleshooting
 
 - **ViGEm error:** install ViGEmBus, then restart DS Controller.
+- **Linux virtual controller error:** install the `.deb`, confirm `test -w /dev/uinput`, then restart DS Controller.
 - **Port already in use:** choose a different port in the app and click **Apply & Restart**.
-- **No packets received:** confirm the DS is using the Windows PC's LAN IP address and the same UDP port shown in the app.
+- **No packets received:** confirm the DS is using the receiver PC's LAN IP address and the same UDP port shown in the app.
 - **Sender config changes do not apply:** if you use build-time defaults, rebuild the ROM after changing `build.mk`; if you use `ds-controller.ini`, confirm the file is on one of the supported flashcart paths.
-- **UDP traffic is blocked:** allow DS Controller to receive UDP traffic on the selected port.
+- **UDP traffic is blocked:** add a subnet-scoped UFW rule for the selected UDP port, as shown in the Ubuntu run instructions.
 - **DS Wi-Fi issue:** confirm the network is 2.4 GHz `802.11b` with open or WEP security, and configure the Wi-Fi profile from a Nintendo WFC-compatible DS game before launching the sender.
-- **Game does not respond:** confirm ViGEmBus is installed and that the game accepts Xbox 360 / XInput controllers.
+- **Game does not respond:** on Windows, confirm ViGEmBus is installed and the game accepts Xbox 360 / XInput controllers; on Ubuntu, confirm the virtual gamepad appears in the system input inventory and the game accepts Linux gamepads.

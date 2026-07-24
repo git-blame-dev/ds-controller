@@ -2,6 +2,9 @@
 name = "ds-controller-app"
 version = "0.1.0"
 edition = "2021"
+authors = ["git-blame-dev <251953086+git-blame-dev@users.noreply.github.com>"]
+homepage = "https://github.com/git-blame-dev/ds-controller"
+repository = "https://github.com/git-blame-dev/ds-controller"
 
 [lib]
 name = "ds_controller_app"

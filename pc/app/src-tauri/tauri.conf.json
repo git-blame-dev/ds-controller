@@ -28,6 +28,19 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.png", "icons/icon.ico"]
+    "category": "Utility",
+    "shortDescription": "Nintendo DS Wi-Fi controller receiver",
+    "longDescription": "Receive Nintendo DS button input over UDP and expose it through a virtual game controller.",
+    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "linux": {
+      "deb": {
+        "section": "utils",
+        "files": {
+          "/usr/lib/udev/rules.d/70-ds-controller-uinput.rules": "linux/70-ds-controller-uinput.rules"
+        },
+        "postInstallScript": "linux/reload-uinput-rules.sh",
+        "postRemoveScript": "linux/reload-uinput-rules.sh"
+      }
+    }
   }
 }

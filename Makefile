@@ -5,6 +5,9 @@ DEVKITARM_IMAGE ?= devkitpro/devkitarm:20260221@sha256:4debd5b33cf4361a557b6bf3b
 DOCKER_USER := $(shell id -u):$(shell id -g)
 PC_CARGO_TARGET_DIR ?= $(CURDIR)/pc/target
 PC_CARGO_RELEASE_DIR := $(PC_CARGO_TARGET_DIR)/$(WINDOWS_TARGET)/release
+LINUX_DEB_BUNDLE_DIR := $(PC_CARGO_TARGET_DIR)/release/bundle/deb
+LINUX_DEB_ARTIFACT := $(CURDIR)/dist/linux/ds-controller-linux-amd64.deb
+LINUX_PACKAGE_VERSION ?= 0.1.0
 PC_STAGED_RELEASE_DIR := $(CURDIR)/dist/pc
 NDS_STAGED_RELEASE_DIR := $(CURDIR)/dist/nds
 PC_PORT ?= 26760
@@ -15,7 +18,7 @@ PC_IP ?= 192.0.2.1
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all nds nds-local pc pc-dist nds-dist dist app-dev test test-ci-package-prereqs clean
+.PHONY: help all nds nds-local pc pc-dist linux linux-dist linux-verify nds-dist dist app-dev test test-ci-package-prereqs clean
 
 help:
 	@printf '%s\n' 'Targets:'
@@ -23,13 +26,16 @@ help:
 	@printf '%s\n' '  make nds-local Build the Nintendo DS ROM with local devkitPro'
 	@printf '%s\n' '  make pc        Cross-build the portable Windows Tauri GUI app from Linux'
 	@printf '%s\n' '  make pc-dist   Build and stage Windows files under dist/pc'
+	@printf '%s\n' '  make linux     Build the Ubuntu/Debian Tauri GUI package'
+	@printf '%s\n' '  make linux-dist Build and stage the Debian package under dist/linux'
+	@printf '%s\n' '  make linux-verify Verify the staged Debian package contents and metadata'
 	@printf '%s\n' '  make nds-dist  Build and stage NDS files under dist/nds'
 	@printf '%s\n' '  make dist      Build and stage all release files under dist/'
 	@printf '%s\n' '  make app-dev   Run the Tauri GUI app in development mode'
 	@printf '%s\n' '  make test      Run DS host tests, receiver Rust tests, and frontend build'
-	@printf '%s\n' '  make all       Build both release artifacts'
+	@printf '%s\n' '  make all       Build all platform release artifacts'
 
-all: nds pc
+all: nds pc linux
 
 nds:
 	docker run --rm --user $(DOCKER_USER) -e HOME=/tmp -v "$(CURDIR)":/workspace -w /workspace \
@@ -65,13 +71,31 @@ pc-dist: pc
 	@cp "$(PC_CARGO_RELEASE_DIR)/WebView2Loader.dll" "$(PC_STAGED_RELEASE_DIR)/WebView2Loader.dll"
 	@printf 'Staged Windows files: %s\n' "$(PC_STAGED_RELEASE_DIR)"
 
+linux:
+	rm -rf "$(LINUX_DEB_BUNDLE_DIR)"
+	CARGO_TARGET_DIR="$(PC_CARGO_TARGET_DIR)" pnpm --dir pc/app tauri build --bundles deb --config '{"version":"$(LINUX_PACKAGE_VERSION)"}'
+	@printf 'Ubuntu/Debian package directory: %s\n' "$(LINUX_DEB_BUNDLE_DIR)"
+
+linux-dist: linux
+	@mkdir -p "$(dir $(LINUX_DEB_ARTIFACT))"
+	@set -- "$(LINUX_DEB_BUNDLE_DIR)"/*.deb; \
+	if [ "$$#" -ne 1 ] || [ ! -f "$$1" ]; then \
+		printf '%s\n' 'Expected exactly one Debian package from the Linux build' >&2; \
+		exit 1; \
+	fi; \
+	cp "$$1" "$(LINUX_DEB_ARTIFACT)"
+	@printf 'Staged Ubuntu/Debian package: %s\n' "$(LINUX_DEB_ARTIFACT)"
+
+linux-verify: linux-dist
+	sh scripts/verify-linux-deb.sh "$(LINUX_DEB_ARTIFACT)" "$(LINUX_PACKAGE_VERSION)"
+
 nds-dist: nds
 	@mkdir -p "$(NDS_STAGED_RELEASE_DIR)"
 	@cp "$(CURDIR)/nds/build/ds-controller.nds" "$(NDS_STAGED_RELEASE_DIR)/ds-controller.nds"
 	@cp "$(CURDIR)/nds/ds-controller.ini" "$(NDS_STAGED_RELEASE_DIR)/ds-controller.ini"
 	@printf 'Staged NDS files: %s\n' "$(NDS_STAGED_RELEASE_DIR)"
 
-dist: pc-dist nds-dist
+dist: pc-dist linux-dist nds-dist
 
 app-dev:
 	pnpm --dir pc/app tauri dev
