@@ -102,14 +102,20 @@ app-dev:
 
 test:
 	$(MAKE) -C nds test
+	cargo fmt --all --check
 	cargo test --manifest-path Cargo.toml
+	cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
 	pnpm --dir pc/app lint
 	pnpm --dir pc/app test
 	pnpm --dir pc/app build
 
 test-ci-package-prereqs:
 	$(MAKE) -C nds test
+	cargo fmt --all --check
 	cargo test --manifest-path Cargo.toml
+	cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
+	pnpm --dir pc/app lint
+	pnpm --dir pc/app test
 
 clean:
 	$(MAKE) -C nds clean
