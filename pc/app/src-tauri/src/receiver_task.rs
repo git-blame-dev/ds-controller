@@ -280,6 +280,7 @@ fn run_receiver_worker(
             Ok(ReceiverEvent::State { sender, state }) => {
                 let output = map_ds_to_xbox(state);
                 packet_count += 1;
+                receiver_session_state.record_packet();
                 match backend.update(output) {
                     Ok(()) => {
                         receiver_session_state.record_update(state.buttons);
@@ -346,20 +347,19 @@ fn run_receiver_worker(
                     continue;
                 }
 
-                set_status(
-                    &app,
-                    &status,
-                    RuntimeStatus {
-                        receiver: ReceiverStatus::Running {
-                            bound_address: bind_addr.to_string(),
-                            last_sender: None,
-                        },
-                        virtual_controller: VirtualControllerStatus::Ready,
-                        pressed_buttons: Vec::new(),
-                        packet_count,
-                        last_packet_at: None,
+                let timeout_fallback = RuntimeStatus {
+                    receiver: ReceiverStatus::Running {
+                        bound_address: bind_addr.to_string(),
+                        last_sender: None,
                     },
-                );
+                    virtual_controller: VirtualControllerStatus::Ready,
+                    pressed_buttons: Vec::new(),
+                    packet_count,
+                    last_packet_at: None,
+                };
+                publish_timeout_status(&status, timeout_fallback, |timeout_status| {
+                    let _ = app.emit(STATUS_EVENT, RuntimeStatusDto::from(timeout_status));
+                });
                 receiver_session_state.record_timeout_status();
 
                 if timeout_release_succeeded {
@@ -381,9 +381,12 @@ struct ReceiverSessionState {
 }
 
 impl ReceiverSessionState {
+    fn record_packet(&mut self) {
+        self.timeout_status_reported = false;
+    }
+
     fn record_update(&mut self, buttons: Buttons) {
         self.has_pressed_inputs = !buttons.is_empty();
-        self.timeout_status_reported = false;
         self.timeout_release_error_reported = false;
     }
 
@@ -411,6 +414,20 @@ impl ReceiverSessionState {
 
         self.timeout_release_error_reported = true;
         true
+    }
+}
+
+fn publish_timeout_status(
+    status: &Arc<Mutex<RuntimeStatus>>,
+    fallback: RuntimeStatus,
+    publish: impl FnOnce(RuntimeStatus),
+) {
+    match status.lock() {
+        Ok(mut current) => {
+            current.pressed_buttons.clear();
+            publish(current.clone());
+        }
+        Err(_) => publish(fallback),
     }
 }
 
@@ -544,8 +561,43 @@ mod tests {
 
         assert!(!state.needs_timeout_status());
 
-        state.record_update(Buttons::default());
+        state.record_packet();
 
         assert!(state.needs_timeout_status());
+    }
+
+    #[test]
+    fn timeout_status_preserves_last_packet_metadata() {
+        use std::cell::{Cell, RefCell};
+
+        let current = RuntimeStatus {
+            receiver: ReceiverStatus::Running {
+                bound_address: "0.0.0.0:26760".to_owned(),
+                last_sender: Some("192.168.1.25:49152".to_owned()),
+            },
+            virtual_controller: VirtualControllerStatus::Ready,
+            pressed_buttons: vec!["a".to_owned()],
+            packet_count: 42,
+            last_packet_at: Some("123456".to_owned()),
+        };
+
+        let shared = Arc::new(Mutex::new(current.clone()));
+        let published = RefCell::new(None);
+        let published_while_locked = Cell::new(false);
+        publish_timeout_status(&shared, RuntimeStatus::default(), |status| {
+            published_while_locked.set(shared.try_lock().is_err());
+            published.replace(Some(status));
+        });
+        let timed_out = published.into_inner().expect("published timeout status");
+
+        assert_eq!(
+            timed_out,
+            RuntimeStatus {
+                pressed_buttons: Vec::new(),
+                ..current
+            }
+        );
+        assert!(published_while_locked.get());
+        assert_eq!(*shared.lock().expect("timeout status"), timed_out);
     }
 }
