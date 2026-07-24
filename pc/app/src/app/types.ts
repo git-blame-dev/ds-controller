@@ -17,14 +17,14 @@ export type ReceiverStatus =
   | { readonly kind: "stopping" }
   | { readonly kind: "error"; readonly message: string }
 
-export type ViGemStatus =
+export type VirtualControllerStatus =
   | { readonly kind: "unknown" }
   | { readonly kind: "ready" }
   | { readonly kind: "error"; readonly message: string }
 
 export interface RuntimeStatus {
 readonly receiver: ReceiverStatus
-readonly viGem: ViGemStatus
+readonly virtualController: VirtualControllerStatus
 readonly pressedButtons: readonly DsButton[]
 readonly packetCount: number
 readonly lastPacketAt: string | null

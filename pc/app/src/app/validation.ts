@@ -1,4 +1,4 @@
-import type { AppSettings, DsButton, LogEntry, LogLevel, ReceiverStatus, RuntimeStatus, ValidationResult, ViGemStatus } from "./types"
+import type { AppSettings, DsButton, LogEntry, LogLevel, ReceiverStatus, RuntimeStatus, ValidationResult, VirtualControllerStatus } from "./types"
 import { DS_BUTTONS } from "./types"
 
 const PORT_ERROR = "Port must be a whole number between 1 and 65535."
@@ -45,8 +45,8 @@ return { ok: false, error: "Runtime status must be an object." }
 const receiver = parseReceiverStatus(value.receiver)
 if (!receiver.ok) return receiver
 
-const viGem = parseViGemStatus(value.viGem)
-if (!viGem.ok) return viGem
+const virtualController = parseVirtualControllerStatus(value.virtualController)
+if (!virtualController.ok) return virtualController
 
 const pressedButtons = parseDsButtonArray(value.pressedButtons)
 if (!pressedButtons.ok) return pressedButtons
@@ -63,7 +63,7 @@ return {
 ok: true,
 value: {
 receiver: receiver.value,
-viGem: viGem.value,
+virtualController: virtualController.value,
 pressedButtons: pressedButtons.value,
 packetCount: packetCount.value,
 lastPacketAt,
@@ -120,9 +120,9 @@ return { ok: false, error: `Unknown receiver status kind: ${value.kind}` }
 }
 }
 
-function parseViGemStatus(value: unknown): ValidationResult<ViGemStatus> {
+function parseVirtualControllerStatus(value: unknown): ValidationResult<VirtualControllerStatus> {
 if (!isRecord(value) || typeof value.kind !== "string") {
-return { ok: false, error: "ViGEm status must include a string kind." }
+return { ok: false, error: "Virtual controller status must include a string kind." }
 }
 
 switch (value.kind) {
@@ -132,9 +132,9 @@ return { ok: true, value: { kind: value.kind } }
 case "error":
 return typeof value.message === "string"
 ? { ok: true, value: { kind: "error", message: value.message } }
-: { ok: false, error: "ViGEm error status must include a message." }
+: { ok: false, error: "Virtual controller error status must include a message." }
 default:
-return { ok: false, error: `Unknown ViGEm status kind: ${value.kind}` }
+return { ok: false, error: `Unknown virtual controller status kind: ${value.kind}` }
 }
 }
 

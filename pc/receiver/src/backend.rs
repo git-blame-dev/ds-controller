@@ -2,6 +2,9 @@ use std::fmt;
 
 use crate::mapping::ControllerOutputState;
 
+#[cfg(target_os = "linux")]
+mod uinput;
+
 #[cfg(windows)]
 mod vigem;
 
@@ -30,8 +33,10 @@ impl fmt::Display for BackendError {
 
 impl std::error::Error for BackendError {}
 
-pub fn create_backend(no_vigem: bool) -> Result<Box<dyn ControllerBackend>, BackendError> {
-    if no_vigem {
+pub fn create_backend(
+    no_virtual_controller: bool,
+) -> Result<Box<dyn ControllerBackend>, BackendError> {
+    if no_virtual_controller {
         return Ok(Box::new(NoopBackend));
     }
 
@@ -43,10 +48,15 @@ fn create_platform_backend() -> Result<Box<dyn ControllerBackend>, BackendError>
     Ok(Box::new(vigem::VigemBackend::new()?))
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+fn create_platform_backend() -> Result<Box<dyn ControllerBackend>, BackendError> {
+    Ok(Box::new(uinput::UinputBackend::new()?))
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 fn create_platform_backend() -> Result<Box<dyn ControllerBackend>, BackendError> {
     Err(BackendError::new(
-        "ViGEm output requires Windows; use --no-vigem on this platform",
+        "virtual controller output is not supported on this platform",
     ))
 }
 
@@ -78,14 +88,14 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(windows))]
-    fn returns_clear_error_for_vigem_on_non_windows() {
+    #[cfg(not(any(windows, target_os = "linux")))]
+    fn returns_clear_error_on_unsupported_platforms() {
         let error = match create_backend(false) {
-            Ok(_) => panic!("expected non-windows vigem error"),
+            Ok(_) => panic!("expected unsupported platform error"),
             Err(error) => error,
         };
 
-        assert!(error.to_string().contains("ViGEm output requires Windows"));
+        assert!(error.to_string().contains("not supported"));
     }
 
     #[test]

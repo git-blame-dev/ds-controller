@@ -9,7 +9,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
 
 const DEFAULT_RUNTIME_STATUS: RuntimeStatus = Object.freeze({
   receiver: Object.freeze({ kind: "idle" }),
-  viGem: Object.freeze({ kind: "unknown" }),
+  virtualController: Object.freeze({ kind: "unknown" }),
 pressedButtons: Object.freeze([]),
 packetCount: 0,
 lastPacketAt: null,

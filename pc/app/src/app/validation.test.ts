@@ -27,7 +27,7 @@ test("accepts the canonical frontend runtime status payload", () => {
 expect(
 parseRuntimeStatus({
 receiver: { kind: "idle" },
-viGem: { kind: "unknown" },
+virtualController: { kind: "unknown" },
 pressedButtons: [],
 packetCount: 0,
 lastPacketAt: null,
@@ -36,7 +36,7 @@ lastPacketAt: null,
 ok: true,
 value: {
 receiver: { kind: "idle" },
-viGem: { kind: "unknown" },
+virtualController: { kind: "unknown" },
 pressedButtons: [],
 packetCount: 0,
 lastPacketAt: null,
@@ -48,7 +48,7 @@ test("accepts the canonical backend running status payload", () => {
 expect(
 parseRuntimeStatus({
 receiver: { kind: "running", boundAddress: "0.0.0.0:26760", lastSender: null },
-viGem: { kind: "ready" },
+virtualController: { kind: "ready" },
 pressedButtons: ["a", "start"],
 packetCount: 42,
 lastPacketAt: "123456",
@@ -57,7 +57,7 @@ lastPacketAt: "123456",
 ok: true,
 value: {
 receiver: { kind: "running", boundAddress: "0.0.0.0:26760", lastSender: null },
-viGem: { kind: "ready" },
+virtualController: { kind: "ready" },
 pressedButtons: ["a", "start"],
 packetCount: 42,
 lastPacketAt: "123456",
@@ -69,7 +69,7 @@ test("rejects non-canonical backend field names", () => {
 expect(
 parseRuntimeStatus({
 receiver: { kind: "Idle" },
-vi_gem: { kind: "Unknown" },
+virtual_controller: { kind: "Unknown" },
 pressed_buttons: [],
 packet_count: 0,
 last_packet_at: null,

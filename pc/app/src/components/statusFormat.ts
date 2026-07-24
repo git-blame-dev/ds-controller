@@ -1,4 +1,4 @@
-import type { ReceiverStatus, ViGemStatus } from "../app/types"
+import type { ReceiverStatus, VirtualControllerStatus } from "../app/types"
 
 export type StatusTone = "neutral" | "good" | "warn" | "bad"
 
@@ -31,7 +31,7 @@ return "neutral"
 }
 }
 
-export function viGemLabel(status: ViGemStatus): string {
+export function virtualControllerLabel(status: VirtualControllerStatus): string {
 switch (status.kind) {
 case "ready":
 return "Ready"

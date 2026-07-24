@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::receiver_task::{ReceiverStatus, RuntimeStatus, VigemStatus};
+use crate::receiver_task::{ReceiverStatus, RuntimeStatus, VirtualControllerStatus};
 use crate::settings::AppSettings;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -36,7 +36,7 @@ impl From<AppSettingsDto> for AppSettings {
 #[serde(rename_all = "camelCase")]
 pub struct RuntimeStatusDto {
     pub receiver: ReceiverStatusDto,
-    pub vi_gem: VigemStatusDto,
+    pub virtual_controller: VirtualControllerStatusDto,
     pub pressed_buttons: Vec<String>,
     pub packet_count: u64,
     pub last_packet_at: Option<String>,
@@ -46,7 +46,7 @@ impl From<RuntimeStatus> for RuntimeStatusDto {
     fn from(status: RuntimeStatus) -> Self {
         Self {
             receiver: ReceiverStatusDto::from(status.receiver),
-            vi_gem: VigemStatusDto::from(status.vigem),
+            virtual_controller: VirtualControllerStatusDto::from(status.virtual_controller),
             pressed_buttons: status.pressed_buttons,
             packet_count: status.packet_count,
             last_packet_at: status.last_packet_at,
@@ -92,7 +92,7 @@ impl From<ReceiverStatus> for ReceiverStatusDto {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind")]
-pub enum VigemStatusDto {
+pub enum VirtualControllerStatusDto {
     #[serde(rename = "unknown")]
     Unknown,
     #[serde(rename = "ready")]
@@ -101,12 +101,12 @@ pub enum VigemStatusDto {
     Error { message: String },
 }
 
-impl From<VigemStatus> for VigemStatusDto {
-    fn from(status: VigemStatus) -> Self {
+impl From<VirtualControllerStatus> for VirtualControllerStatusDto {
+    fn from(status: VirtualControllerStatus) -> Self {
         match status {
-            VigemStatus::Unknown => Self::Unknown,
-            VigemStatus::Ready => Self::Ready,
-            VigemStatus::Error(message) => Self::Error { message },
+            VirtualControllerStatus::Unknown => Self::Unknown,
+            VirtualControllerStatus::Ready => Self::Ready,
+            VirtualControllerStatus::Error(message) => Self::Error { message },
         }
     }
 }
@@ -162,7 +162,7 @@ mod tests {
             serde_json::to_value(status).expect("runtime status should serialize"),
             json!({
             "receiver": { "kind": "idle" },
-            "viGem": { "kind": "unknown" },
+            "virtualController": { "kind": "unknown" },
             "pressedButtons": [],
             "packetCount": 0,
             "lastPacketAt": null,
@@ -177,7 +177,7 @@ mod tests {
                 bound_address: "0.0.0.0:26760".to_owned(),
                 last_sender: None,
             },
-            vigem: VigemStatus::Ready,
+            virtual_controller: VirtualControllerStatus::Ready,
             pressed_buttons: vec!["a".to_owned(), "start".to_owned()],
             packet_count: 42,
             last_packet_at: Some("123456".to_owned()),
@@ -191,7 +191,7 @@ mod tests {
             "boundAddress": "0.0.0.0:26760",
             "lastSender": null,
             },
-            "viGem": { "kind": "ready" },
+            "virtualController": { "kind": "ready" },
             "pressedButtons": ["a", "start"],
             "packetCount": 42,
             "lastPacketAt": "123456",

@@ -1,17 +1,17 @@
 import type { ChangeEvent } from "react"
 
-import type { AppSettings, DsButton, ReceiverStatus, ViGemStatus } from "../app/types"
+import type { AppSettings, DsButton, ReceiverStatus, VirtualControllerStatus } from "../app/types"
 import type { ValidationResult } from "../app/types"
 import { ButtonBadges } from "./ButtonBadges"
 import { MetricItem } from "./MetricItem"
 import { StatusBadge } from "./StatusBadge"
-import { receiverStatusLabel, receiverStatusTone, type StatusTone, viGemLabel } from "./statusFormat"
+import { receiverStatusLabel, receiverStatusTone, type StatusTone, virtualControllerLabel } from "./statusFormat"
 
 interface ReceiverCardProps {
 readonly draftSettings: AppSettings
 readonly portValue: string
 readonly receiver: ReceiverStatus
-readonly viGem: ViGemStatus
+readonly virtualController: VirtualControllerStatus
 readonly lastPacketAt: string | null
 readonly packetCount: number
 readonly pressedButtons: readonly DsButton[]
@@ -28,7 +28,7 @@ export function ReceiverCard({
 draftSettings,
 portValue,
 receiver,
-viGem,
+virtualController,
 lastPacketAt,
 packetCount,
 pressedButtons,
@@ -44,7 +44,7 @@ const isRunning = receiver.kind === "running" || receiver.kind === "starting"
 const canApply = hasUnsavedSettings && portValidation.ok
 const bindAddress = receiver.kind === "running" ? receiver.boundAddress : "Not listening"
 const sender = receiver.kind === "running" ? receiver.lastSender ?? "Waiting for DS" : "None"
-const viGemTone = viGemStatusTone(viGem)
+const virtualControllerTone = virtualControllerStatusTone(virtualController)
 
 return (
 <section className="rounded-2xl border border-white/10 bg-card/80 p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
@@ -52,7 +52,7 @@ return (
 <h1 className="text-sm font-semibold text-white">Receiver</h1>
 <div className="flex flex-wrap items-center gap-2">
 <StatusBadge label={receiverStatusLabel(receiver)} tone={receiverStatusTone(receiver)} />
-<StatusBadge label={`ViGEm ${viGemLabel(viGem)}`} tone={viGemTone} />
+<StatusBadge label={`Virtual controller ${virtualControllerLabel(virtualController)}`} tone={virtualControllerTone} />
 </div>
 </div>
 
@@ -95,7 +95,7 @@ Apply & Restart
 <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Pressed buttons</p>
 <ButtonBadges buttons={pressedButtons} />
 </div>
-{viGem.kind === "error" ? <p className="mt-3 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{viGem.message}</p> : null}
+{virtualController.kind === "error" ? <p className="mt-3 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{virtualController.message}</p> : null}
 
 <div className="mt-4 grid gap-3 md:grid-cols-2">
 <SwitchRow label="Start receiver when app opens" checked={draftSettings.startReceiverWhenAppOpens} onChange={(value) => onToggle("startReceiverWhenAppOpens", value)} />
@@ -105,7 +105,7 @@ Apply & Restart
 )
 }
 
-function viGemStatusTone(status: ViGemStatus): StatusTone {
+function virtualControllerStatusTone(status: VirtualControllerStatus): StatusTone {
 switch (status.kind) {
 case "ready":
 return "good"

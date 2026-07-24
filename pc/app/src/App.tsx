@@ -137,7 +137,7 @@ return (
 draftSettings={{ ...state.draftSettings, port: portValidation.ok ? portValidation.value : state.draftSettings.port }}
 portValue={portInput}
 receiver={state.runtimeStatus.receiver}
-viGem={state.runtimeStatus.viGem}
+virtualController={state.runtimeStatus.virtualController}
 lastPacketAt={state.runtimeStatus.lastPacketAt}
 packetCount={state.runtimeStatus.packetCount}
 pressedButtons={state.runtimeStatus.pressedButtons}

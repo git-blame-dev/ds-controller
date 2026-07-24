@@ -30,7 +30,7 @@ pub enum ReceiverStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum VigemStatus {
+pub enum VirtualControllerStatus {
     Unknown,
     Ready,
     Error(String),
@@ -39,7 +39,7 @@ pub enum VigemStatus {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RuntimeStatus {
     pub receiver: ReceiverStatus,
-    pub vigem: VigemStatus,
+    pub virtual_controller: VirtualControllerStatus,
     pub pressed_buttons: Vec<String>,
     pub packet_count: u64,
     pub last_packet_at: Option<String>,
@@ -49,7 +49,7 @@ impl Default for RuntimeStatus {
     fn default() -> Self {
         Self {
             receiver: ReceiverStatus::Idle,
-            vigem: VigemStatus::Unknown,
+            virtual_controller: VirtualControllerStatus::Unknown,
             pressed_buttons: Vec::new(),
             packet_count: 0,
             last_packet_at: None,
@@ -71,7 +71,7 @@ impl ReceiverController {
             .map(|status| status.clone())
             .unwrap_or_else(|_| RuntimeStatus {
                 receiver: ReceiverStatus::Error("receiver status is unavailable".to_owned()),
-                vigem: VigemStatus::Unknown,
+                virtual_controller: VirtualControllerStatus::Unknown,
                 pressed_buttons: Vec::new(),
                 packet_count: 0,
                 last_packet_at: None,
@@ -97,7 +97,7 @@ impl ReceiverController {
             &status,
             RuntimeStatus {
                 receiver: ReceiverStatus::Starting,
-                vigem: VigemStatus::Unknown,
+                virtual_controller: VirtualControllerStatus::Unknown,
                 pressed_buttons: Vec::new(),
                 packet_count: 0,
                 last_packet_at: None,
@@ -213,7 +213,7 @@ fn run_receiver_worker(
                 &status,
                 RuntimeStatus {
                     receiver: ReceiverStatus::Error(message),
-                    vigem: VigemStatus::Unknown,
+                    virtual_controller: VirtualControllerStatus::Unknown,
                     pressed_buttons: Vec::new(),
                     packet_count: 0,
                     last_packet_at: None,
@@ -235,7 +235,7 @@ fn run_receiver_worker(
                 &status,
                 RuntimeStatus {
                     receiver: ReceiverStatus::Error(message.clone()),
-                    vigem: VigemStatus::Error(message),
+                    virtual_controller: VirtualControllerStatus::Error(message),
                     pressed_buttons: Vec::new(),
                     packet_count: 0,
                     last_packet_at: None,
@@ -253,7 +253,7 @@ fn run_receiver_worker(
                 bound_address: bind_addr.to_string(),
                 last_sender: None,
             },
-            vigem: VigemStatus::Ready,
+            virtual_controller: VirtualControllerStatus::Ready,
             pressed_buttons: Vec::new(),
             packet_count: 0,
             last_packet_at: None,
@@ -302,7 +302,7 @@ fn run_receiver_worker(
                             bound_address: bind_addr.to_string(),
                             last_sender: Some(sender.to_string()),
                         },
-                        vigem: VigemStatus::Ready,
+                        virtual_controller: VirtualControllerStatus::Ready,
                         pressed_buttons,
                         packet_count,
                         last_packet_at: Some(now_millis_string()),
@@ -354,7 +354,7 @@ fn run_receiver_worker(
                             bound_address: bind_addr.to_string(),
                             last_sender: None,
                         },
-                        vigem: VigemStatus::Ready,
+                        virtual_controller: VirtualControllerStatus::Ready,
                         pressed_buttons: Vec::new(),
                         packet_count,
                         last_packet_at: None,
