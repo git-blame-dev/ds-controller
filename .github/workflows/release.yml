@@ -95,16 +95,23 @@ jobs:
               [ -n "$existing_tag" ] || continue
 
               release_assets="$(gh release view "$existing_tag" --repo "$REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
-              missing_assets=false
+              current_assets_complete=true
+              legacy_assets_complete=true
 
-              for required_asset in "ds-controller-${existing_tag}.zip" 'ds-controller-linux-amd64.deb' 'SHA256SUMS'; do
+              for required_asset in "ds-controller-windows-${existing_tag}.zip" "ds-controller-ubuntu-${existing_tag}.zip" 'SHA256SUMS'; do
                 if ! printf '%s\n' "$release_assets" | grep -Fxq "$required_asset"; then
-                  printf 'Existing release %s is missing required asset %s.\n' "$existing_tag" "$required_asset" >&2
-                  missing_assets=true
+                  current_assets_complete=false
                 fi
               done
 
-              if [ "$missing_assets" = true ]; then
+              for required_asset in "ds-controller-${existing_tag}.zip" 'ds-controller-linux-amd64.deb' 'SHA256SUMS'; do
+                if ! printf '%s\n' "$release_assets" | grep -Fxq "$required_asset"; then
+                  legacy_assets_complete=false
+                fi
+              done
+
+              if [ "$current_assets_complete" != true ] && [ "$legacy_assets_complete" != true ]; then
+                printf 'Existing release %s is incomplete for both supported asset layouts.\n' "$existing_tag" >&2
                 printf 'Refusing to create a second release for %s while %s is incomplete.\n' "$TARGET_SHA" "$existing_tag" >&2
                 exit 1
               fi
@@ -130,7 +137,7 @@ jobs:
             [ -n "$path" ] || continue
 
             case "$path" in
-              Makefile|nds/*|pc/*|Cargo.toml|Cargo.lock|package.json|pnpm-lock.yaml|pnpm-workspace.yaml)
+              .github/workflows/release.yml|Makefile|nds/*|pc/*|Cargo.toml|Cargo.lock|package.json|pnpm-lock.yaml|pnpm-workspace.yaml)
                 has_release_artifact_input_change=true
                 ;;
             esac
@@ -189,28 +196,51 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
 
-      - name: Create release zip
+      - name: Create platform release zips
         if: steps.release_scope.outputs.should_publish == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          mkdir -p dist
-          (cd package && zip -r -D "../dist/ds-controller-${VERSION}.zip" pc nds)
-          cp package/linux/ds-controller-linux-amd64.deb dist/ds-controller-linux-amd64.deb
+          mkdir -p \
+            bundle/ds-controller-windows \
+            bundle/ds-controller-ubuntu \
+            dist
+
+          cp package/pc/ds-controller.exe package/pc/WebView2Loader.dll \
+            package/nds/ds-controller.nds package/nds/ds-controller.ini \
+            bundle/ds-controller-windows/
+          cp package/linux/ds-controller-linux-amd64.deb \
+            package/nds/ds-controller.nds package/nds/ds-controller.ini \
+            bundle/ds-controller-ubuntu/
+
+          (cd bundle && zip -r -D "../dist/ds-controller-windows-${VERSION}.zip" ds-controller-windows)
+          (cd bundle && zip -r -D "../dist/ds-controller-ubuntu-${VERSION}.zip" ds-controller-ubuntu)
 
       - name: Verify release zip contents
         if: steps.release_scope.outputs.should_publish == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          zipinfo -1 "dist/ds-controller-${VERSION}.zip" | sort > actual.txt
-          cat > expected.txt <<'EOF'
-          nds/ds-controller.ini
-          nds/ds-controller.nds
-          pc/WebView2Loader.dll
-          pc/ds-controller.exe
+          zipinfo -1 "dist/ds-controller-windows-${VERSION}.zip" | LC_ALL=C sort > actual-windows.txt
+          cat > expected-windows.txt <<'EOF'
+          ds-controller-windows/WebView2Loader.dll
+          ds-controller-windows/ds-controller.exe
+          ds-controller-windows/ds-controller.ini
+          ds-controller-windows/ds-controller.nds
           EOF
-          diff -u expected.txt actual.txt
+          diff -u expected-windows.txt actual-windows.txt
+
+          zipinfo -1 "dist/ds-controller-ubuntu-${VERSION}.zip" | LC_ALL=C sort > actual-ubuntu.txt
+          cat > expected-ubuntu.txt <<'EOF'
+          ds-controller-ubuntu/ds-controller-linux-amd64.deb
+          ds-controller-ubuntu/ds-controller.ini
+          ds-controller-ubuntu/ds-controller.nds
+          EOF
+          diff -u expected-ubuntu.txt actual-ubuntu.txt
+
+          unzip -p "dist/ds-controller-ubuntu-${VERSION}.zip" \
+            ds-controller-ubuntu/ds-controller-linux-amd64.deb > embedded.deb
+          cmp package/linux/ds-controller-linux-amd64.deb embedded.deb
 
       - name: Generate release checksums
         if: steps.release_scope.outputs.should_publish == 'true'
@@ -218,7 +248,10 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           cd dist
-          sha256sum "ds-controller-${VERSION}.zip" ds-controller-linux-amd64.deb > SHA256SUMS
+          sha256sum \
+            "ds-controller-windows-${VERSION}.zip" \
+            "ds-controller-ubuntu-${VERSION}.zip" \
+            > SHA256SUMS
 
       - name: Generate release notes
         if: steps.release_scope.outputs.should_publish == 'true'
@@ -247,12 +280,16 @@ jobs:
             fi
 
             printf '\n## Artifacts\n\n'
-            printf -- "- Windows app: \`pc/ds-controller.exe\`\n"
-            printf -- "- WebView2 loader: \`pc/WebView2Loader.dll\`\n"
-            printf -- "- Ubuntu app: \`ds-controller-linux-amd64.deb\`\n"
-            printf -- "- Nintendo DS ROM: \`nds/ds-controller.nds\`\n"
-            printf -- "- DS config example: \`nds/ds-controller.ini\`\n"
+            printf -- "- Windows bundle: \`ds-controller-windows-${VERSION}.zip\`\n"
+            printf -- "- Ubuntu bundle: \`ds-controller-ubuntu-${VERSION}.zip\`\n"
+            printf -- '- Both bundles include the Nintendo DS ROM and config example.\n'
+            printf -- '- The Ubuntu bundle contains the installable `ds-controller-linux-amd64.deb`.\n'
             printf -- "- Checksums: \`SHA256SUMS\`\n"
+
+            printf '\n## Packaging change\n\n'
+            printf -- '- New releases use separate Windows and Ubuntu ZIPs.\n'
+            printf -- '- The previous generic ZIP and direct `.deb` asset are no longer published.\n'
+            printf -- '- Older releases and their existing assets remain unchanged.\n'
 
             printf '\n## Verification\n\n'
             printf -- "- \`make test\`\n"

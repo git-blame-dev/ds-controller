@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/git-blame-dev/ds-controller?label=release)](https://github.com/git-blame-dev/ds-controller/releases/latest)
-[![Windows app](https://img.shields.io/badge/Windows%20app-in%20release%20zip-0078D4)](https://github.com/git-blame-dev/ds-controller/releases/latest)
-[![Ubuntu app](https://img.shields.io/badge/Ubuntu%2024.04-.deb-E95420?logo=ubuntu&logoColor=white)](https://github.com/git-blame-dev/ds-controller/releases/latest)
-[![Nintendo DS ROM](https://img.shields.io/badge/DS%20ROM-in%20release%20zip-blue)](https://github.com/git-blame-dev/ds-controller/releases/latest)
+[![Windows bundle](https://img.shields.io/badge/Windows-release%20ZIP-0078D4)](https://github.com/git-blame-dev/ds-controller/releases/latest)
+[![Ubuntu bundle](https://img.shields.io/badge/Ubuntu%2024.04-release%20ZIP-E95420?logo=ubuntu&logoColor=white)](https://github.com/git-blame-dev/ds-controller/releases/latest)
+[![Nintendo DS ROM](https://img.shields.io/badge/DS%20ROM-in%20both%20ZIPs-blue)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 
 Use a Nintendo DS or DS Lite as a Wi-Fi controller for PC games through a virtual game controller on Windows or Ubuntu.
 
@@ -31,7 +31,7 @@ The project includes both sides of the system: a Nintendo DS ROM for the sender 
 - **PC receiver backend:** Rust, UDP socket handling, ViGEm on Windows, and `evdev`/`uinput` on Ubuntu.
 - **Desktop UI:** Tauri 2, React 19, TypeScript, Vite, and pnpm.
 - **Build / release tooling:** Make targets for deterministic tests, DS ROM builds, Ubuntu Debian packages, and Linux-first Windows cross-builds.
-- **CI / artifacts:** GitHub Actions release workflow with Windows app files, an Ubuntu `.deb`, the NDS ROM, and example configuration.
+- **CI / artifacts:** GitHub Actions release workflow with complete Windows and Ubuntu bundles, each including the NDS ROM and example configuration.
 
 ## 🧠 Engineering Highlights
 
@@ -196,6 +196,8 @@ Copy `dist/pc/ds-controller.exe` and `dist/pc/WebView2Loader.dll` to the same fo
 
 On Ubuntu, install the `.deb` and launch **DS Controller** from the application menu or run `ds-controller`. The package configures `/dev/uinput` access, and the app creates a `DS Controller Virtual Gamepad` while the receiver is running.
 
+For a GitHub release, extract `ds-controller-ubuntu-vTAG.zip`, then install the bundled package with `sudo apt install ./ds-controller-ubuntu/ds-controller-linux-amd64.deb`.
+
 If UFW is active, allow the configured UDP port from the DS network. Replace the subnet and port if your LAN differs:
 
 ```sh
@@ -232,7 +234,7 @@ The DS host tests cover packet encoding, input mapping, and display wake policy.
 
 ## 📦 Releases / Artifacts
 
-[GitHub Releases](https://github.com/git-blame-dev/ds-controller/releases) publish an Ubuntu `.deb` plus a complete zip containing the Windows app files, NDS ROM, and `ds-controller.ini`.
+New [GitHub Releases](https://github.com/git-blame-dev/ds-controller/releases) publish two complete bundles: `ds-controller-windows-vTAG.zip` and `ds-controller-ubuntu-vTAG.zip`. Both include the NDS ROM and `ds-controller.ini`; the Ubuntu bundle contains the installable `.deb`. Older releases remain unchanged and may use the previous generic ZIP and direct `.deb` layout.
 
 For local builds and manual testing, artifacts are staged at:
 
