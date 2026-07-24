@@ -27,6 +27,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_XWIN_VERSION: 0.22.0
+  LINUX_PACKAGE_VERSION: 0.1.${{ github.run_number }}
 
 jobs:
   workflow-lint:
@@ -120,6 +121,20 @@ jobs:
       - name: Run package prerequisite tests
         if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         run: make test-ci-package-prereqs
+
+      - name: Build, stage, and verify Ubuntu release package
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        run: make linux-verify
+
+      - name: Upload Ubuntu app package
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        uses: actions/upload-artifact@v7
+        with:
+          name: ds-controller-linux-deb
+          path: dist/linux
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
 
       - name: Build and stage Windows release files
         if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')

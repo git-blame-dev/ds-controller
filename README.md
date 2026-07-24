@@ -3,6 +3,7 @@
 [![CI](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/git-blame-dev/ds-controller?label=release)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 [![Windows app](https://img.shields.io/badge/Windows%20app-in%20release%20zip-0078D4)](https://github.com/git-blame-dev/ds-controller/releases/latest)
+[![Ubuntu app](https://img.shields.io/badge/Ubuntu%2024.04-.deb-E95420?logo=ubuntu&logoColor=white)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 [![Nintendo DS ROM](https://img.shields.io/badge/DS%20ROM-in%20release%20zip-blue)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 
 Use a Nintendo DS or DS Lite as a Wi-Fi controller for PC games through a virtual game controller on Windows or Ubuntu.
@@ -30,7 +31,7 @@ The project includes both sides of the system: a Nintendo DS ROM for the sender 
 - **PC receiver backend:** Rust, UDP socket handling, ViGEm on Windows, and `evdev`/`uinput` on Ubuntu.
 - **Desktop UI:** Tauri 2, React 19, TypeScript, Vite, and pnpm.
 - **Build / release tooling:** Make targets for deterministic tests, DS ROM builds, Ubuntu Debian packages, and Linux-first Windows cross-builds.
-- **CI / artifacts:** GitHub Actions release workflow with Windows app files, the NDS ROM, and example configuration.
+- **CI / artifacts:** GitHub Actions release workflow with Windows app files, an Ubuntu `.deb`, the NDS ROM, and example configuration.
 
 ## 🧠 Engineering Highlights
 
@@ -225,13 +226,13 @@ make app-dev
 
 Lean local workflow: `make test` validates the code; `make linux-verify` builds and inspects the Ubuntu package; `make dist` stages all release artifacts.
 
-CI runs deterministic tests, cross-builds the Windows app, builds the NDS ROM, and stages artifacts under `dist/pc` and `dist/nds`.
+CI runs deterministic tests, builds and verifies the Ubuntu package, cross-builds the Windows app, builds the NDS ROM, and stages artifacts under `dist/linux`, `dist/pc`, and `dist/nds`.
 
 The DS host tests cover packet encoding, input mapping, and display wake policy. Hardware behavior such as Wi-Fi association, backlight control, WebView2 startup, ViGEmBus integration, Linux game detection, firewall prompts, and real controller output still requires manual platform and DS validation.
 
 ## 📦 Releases / Artifacts
 
-[GitHub Releases](https://github.com/git-blame-dev/ds-controller/releases) publish a complete zip containing the Windows app files, NDS ROM, and `ds-controller.ini`.
+[GitHub Releases](https://github.com/git-blame-dev/ds-controller/releases) publish an Ubuntu `.deb` plus a complete zip containing the Windows app files, NDS ROM, and `ds-controller.ini`.
 
 For local builds and manual testing, artifacts are staged at:
 
@@ -240,7 +241,7 @@ For local builds and manual testing, artifacts are staged at:
 - Windows executable: `dist/pc/ds-controller.exe`
 - WebView2 loader DLL: `dist/pc/WebView2Loader.dll`
 
-When testing manually on Windows, keep `ds-controller.exe` and `WebView2Loader.dll` together. On Ubuntu, install the `.deb` so its package-owned udev rule is applied. CI uploads the staged Windows and NDS artifact directories.
+When testing manually on Windows, keep `ds-controller.exe` and `WebView2Loader.dll` together. On Ubuntu, install the `.deb` so its package-owned udev rule is applied. CI uploads all three staged artifact directories.
 
 ## ⚠️ Limitations
 

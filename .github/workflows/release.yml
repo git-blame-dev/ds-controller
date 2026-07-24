@@ -97,7 +97,7 @@ jobs:
               release_assets="$(gh release view "$existing_tag" --repo "$REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)"
               missing_assets=false
 
-              for required_asset in "ds-controller-${existing_tag}.zip" 'SHA256SUMS'; do
+              for required_asset in "ds-controller-${existing_tag}.zip" 'ds-controller-linux-amd64.deb' 'SHA256SUMS'; do
                 if ! printf '%s\n' "$release_assets" | grep -Fxq "$required_asset"; then
                   printf 'Existing release %s is missing required asset %s.\n' "$existing_tag" "$required_asset" >&2
                   missing_assets=true
@@ -180,6 +180,15 @@ jobs:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
 
+      - name: Download Ubuntu app artifact from CI
+        if: steps.release_scope.outputs.should_publish == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: ds-controller-linux-deb
+          path: package/linux
+          github-token: ${{ github.token }}
+          run-id: ${{ github.event.workflow_run.id }}
+
       - name: Create release zip
         if: steps.release_scope.outputs.should_publish == 'true'
         env:
@@ -187,6 +196,7 @@ jobs:
         run: |
           mkdir -p dist
           (cd package && zip -r -D "../dist/ds-controller-${VERSION}.zip" pc nds)
+          cp package/linux/ds-controller-linux-amd64.deb dist/ds-controller-linux-amd64.deb
 
       - name: Verify release zip contents
         if: steps.release_scope.outputs.should_publish == 'true'
@@ -208,7 +218,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           cd dist
-          sha256sum "ds-controller-${VERSION}.zip" > SHA256SUMS
+          sha256sum "ds-controller-${VERSION}.zip" ds-controller-linux-amd64.deb > SHA256SUMS
 
       - name: Generate release notes
         if: steps.release_scope.outputs.should_publish == 'true'
@@ -239,6 +249,7 @@ jobs:
             printf '\n## Artifacts\n\n'
             printf -- "- Windows app: \`pc/ds-controller.exe\`\n"
             printf -- "- WebView2 loader: \`pc/WebView2Loader.dll\`\n"
+            printf -- "- Ubuntu app: \`ds-controller-linux-amd64.deb\`\n"
             printf -- "- Nintendo DS ROM: \`nds/ds-controller.nds\`\n"
             printf -- "- DS config example: \`nds/ds-controller.ini\`\n"
             printf -- "- Checksums: \`SHA256SUMS\`\n"
@@ -246,6 +257,7 @@ jobs:
             printf '\n## Verification\n\n'
             printf -- "- \`make test\`\n"
             printf -- "- \`make pc\`\n"
+            printf -- "- \`make linux-verify\`\n"
             printf -- "- \`make nds\`\n"
 
             printf '\n## Full changelog\n\n'
