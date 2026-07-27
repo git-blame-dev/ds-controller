@@ -1,10 +1,10 @@
 # 🎮 DS Controller
 
 [![CI](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/git-blame-dev/ds-controller/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/git-blame-dev/ds-controller?label=release)](https://github.com/git-blame-dev/ds-controller/releases/latest)
-[![Windows bundle](https://img.shields.io/badge/Windows-release%20ZIP-0078D4)](https://github.com/git-blame-dev/ds-controller/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/git-blame-dev/ds-controller?label=release&logo=github&logoColor=white)](https://github.com/git-blame-dev/ds-controller/releases/latest)
+[![Windows bundle](https://img.shields.io/badge/Windows-release%20ZIP-0078D4?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTAgMGgxMS4zNzd2MTEuMzcySDB6bTEyLjYyMyAwSDI0djExLjM3MkgxMi42MjN6TTAgMTIuNjIzaDExLjM3N1YyNEgwem0xMi42MjMgMEgyNFYyNEgxMi42MjN6Ii8+PC9zdmc+Cg==)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 [![Ubuntu bundle](https://img.shields.io/badge/Ubuntu%2024.04-release%20ZIP-E95420?logo=ubuntu&logoColor=white)](https://github.com/git-blame-dev/ds-controller/releases/latest)
-[![Nintendo DS ROM](https://img.shields.io/badge/DS%20ROM-in%20both%20ZIPs-blue)](https://github.com/git-blame-dev/ds-controller/releases/latest)
+[![Nintendo DS ROM](https://img.shields.io/badge/DS%20ROM-in%20both%20ZIPs-blue?logo=data:image/svg%2bxml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTMgMWgxOGEyIDIgMCAwIDEgMiAydjhIMVYzYTIgMiAwIDAgMSAyLTJabTIgMnY2aDE0VjNINVpNMSAxM2gyMnY4YTIgMiAwIDAgMS0yIDJIM2EyIDIgMCAwIDEtMi0ydi04Wm00IDJ2MkgzdjJoMnYyaDJ2LTJoMnYtMkg3di0ySDVabTEyIDJhMSAxIDAgMSAwIDAgMiAxIDEgMCAwIDAgMC0yWm0zLTJhMSAxIDAgMSAwIDAgMiAxIDEgMCAwIDAgMC0yWiIvPjwvc3ZnPgo=)](https://github.com/git-blame-dev/ds-controller/releases/latest)
 
 Use a Nintendo DS or DS Lite as a Wi-Fi controller for PC games through a virtual game controller on Windows or Ubuntu.
 
