@@ -11,13 +11,17 @@ if [[ ! "$version" =~ ^[0-9]{4}\.[1-9][0-9]?\.[1-9][0-9]?-[1-9][0-9]*$ ]]; then
 fi
 
 skip_mutation=false
-if release_json=$(gh release view "$tag" --json isDraft 2>/dev/null); then
-  remote_sha=$(git ls-remote origin "refs/tags/$tag^{}" "refs/tags/$tag" | awk 'NR == 1 { value=$1 } /\^\{\}$/ { value=$1 } END { print value }')
-  if [ "$remote_sha" != "$target_sha" ]; then
-    printf 'existing release %s points to %s, expected %s\n' "$tag" "${remote_sha:-unknown}" "$target_sha" >&2
+if release_json=$(gh release view "$tag" --json isDraft,targetCommitish 2>/dev/null); then
+  is_draft=$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["isDraft"]).lower())' <<<"$release_json")
+  if [ "$is_draft" = true ]; then
+    release_sha=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["targetCommitish"])' <<<"$release_json")
+  else
+    release_sha=$(git ls-remote origin "refs/tags/$tag^{}" "refs/tags/$tag" | awk 'NR == 1 { value=$1 } /\^\{\}$/ { value=$1 } END { print value }')
+  fi
+  if [ "$release_sha" != "$target_sha" ]; then
+    printf 'existing release %s points to %s, expected %s\n' "$tag" "${release_sha:-unknown}" "$target_sha" >&2
     exit 1
   fi
-  is_draft=$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["isDraft"]).lower())' <<<"$release_json")
   if [ "$is_draft" = false ]; then
     skip_mutation=true
   fi

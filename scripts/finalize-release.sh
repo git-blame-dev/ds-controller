@@ -19,7 +19,7 @@ done
 [ -s "$asset_dir/ds-controller-windows-$tag.zip" ] || { printf 'missing Windows convenience ZIP\n' >&2; exit 1; }
 [ -s "$asset_dir/ds-controller-ubuntu-$tag.zip" ] || { printf 'missing Ubuntu convenience ZIP\n' >&2; exit 1; }
 
-release_json=$(gh release view "$tag" --json isDraft,isPrerelease)
+release_json=$(gh release view "$tag" --json assets,isDraft,isPrerelease,targetCommitish)
 is_prerelease=$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["isPrerelease"]).lower())' <<<"$release_json")
 is_draft=$(python3 -c 'import json,sys; print(str(json.load(sys.stdin)["isDraft"]).lower())' <<<"$release_json")
 [ "$is_prerelease" = false ] || { printf 'release is unexpectedly a prerelease\n' >&2; exit 1; }
@@ -35,38 +35,38 @@ for payload in "${debs[0]}" "${exes[0]}"; do
   minisign -Vm "$asset_dir/$payload" -p "$asset_dir/updater.pub" -x "$asset_dir/$payload.minisig"
 done
 
-REPOSITORY=${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required} python3 - "$asset_dir" "$version" "$tag" "${debs[0]}" "${exes[0]}" <<'PY'
-import json, os, pathlib, subprocess, sys
+REPOSITORY=${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required} RELEASE_JSON="$release_json" python3 - "$asset_dir" "$version" "$tag" "${debs[0]}" "${exes[0]}" <<'PY'
+import json, os, pathlib, sys
 
 directory, version, tag, deb_name, exe_name = sys.argv[1:]
 manifest = json.loads(pathlib.Path(directory, "latest.json").read_text())
 if manifest.get("version") != version:
     raise SystemExit("latest.json version mismatch")
-assets = json.loads(subprocess.check_output([
-    "gh", "api", f"repos/{os.environ['REPOSITORY']}/releases/tags/{tag}"
-]))["assets"]
-asset_ids_by_name = {asset["name"]: str(asset["id"]) for asset in assets}
+assets = json.loads(os.environ["RELEASE_JSON"])["assets"]
+asset_urls_by_name = {asset["name"]: asset["apiUrl"] for asset in assets}
 expected = {"linux-x86_64-deb": deb_name, "windows-x86_64-nsis": exe_name}
 for platform, filename in expected.items():
     entry = manifest.get("platforms", {}).get(platform)
     if not entry:
         raise SystemExit(f"missing {platform} updater entry")
-    asset_id = asset_ids_by_name.get(filename)
-    if not asset_id:
+    asset_url = asset_urls_by_name.get(filename)
+    if not asset_url:
         raise SystemExit(f"release does not contain {filename}")
-    expected_url = f"https://api.github.com/repos/{os.environ['REPOSITORY']}/releases/assets/{asset_id}"
-    if entry.get("url") != expected_url:
+    if entry.get("url") != asset_url:
         raise SystemExit(f"{platform} URL does not exactly reference {filename}")
     signature = pathlib.Path(directory, filename + ".sig").read_text().strip()
     if entry.get("signature") != signature:
         raise SystemExit(f"{platform} inline signature mismatch")
 PY
 
-remote_sha=$(git ls-remote origin "refs/tags/$tag^{}" "refs/tags/$tag" | awk 'NR == 1 { value=$1 } /\^\{\}$/ { value=$1 } END { print value }')
-[ "$remote_sha" = "$target_sha" ] || { printf 'release tag moved before promotion\n' >&2; exit 1; }
-if [ "${VERIFY_ONLY:-false}" != true ]; then
+if [ "$is_draft" = true ]; then
+  release_sha=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["targetCommitish"])' <<<"$release_json")
+  [ "$release_sha" = "$target_sha" ] || { printf 'release source changed before promotion\n' >&2; exit 1; }
   current_main=$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')
   [ "$current_main" = "$target_sha" ] || { printf 'main advanced before promotion\n' >&2; exit 1; }
+else
+  remote_sha=$(git ls-remote origin "refs/tags/$tag^{}" "refs/tags/$tag" | awk 'NR == 1 { value=$1 } /\^\{\}$/ { value=$1 } END { print value }')
+  [ "$remote_sha" = "$target_sha" ] || { printf 'release tag moved after publication\n' >&2; exit 1; }
 fi
 
 rm -f "$asset_dir/updater.pub" "$asset_dir"/*.minisig

@@ -11,13 +11,13 @@ cat > "$mock_bin/gh" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 if [ "$1 $2 ${3:-}" = "release view v2026.9.14-4" ]; then
-  printf '{"isDraft":false,"isPrerelease":false}\n'
+  printf '{"isDraft":false,"isPrerelease":false,"assets":[{"name":"synthetic.deb","apiUrl":"https://api.github.com/repos/synthetic/project/releases/assets/1"},{"name":"synthetic.exe","apiUrl":"https://api.github.com/repos/synthetic/project/releases/assets/2"}]}\n'
 elif [ "$1 $2 ${3:-}" = "release view v2026.9.15-8" ]; then
-  printf '{"isDraft":true,"isPrerelease":false}\n'
+  printf '{"isDraft":true,"isPrerelease":false,"targetCommitish":"target-sha","assets":[{"name":"synthetic.deb","apiUrl":"https://api.github.com/repos/synthetic/project/releases/assets/1"},{"name":"synthetic.exe","apiUrl":"https://api.github.com/repos/synthetic/project/releases/assets/2"}]}\n'
+elif [ "$1 $2 ${3:-}" = "release view v2026.9.17-10" ]; then
+  printf '{"isDraft":true,"isPrerelease":false,"targetCommitish":"target-sha","assets":[{"name":"synthetic.deb","apiUrl":"https://api.github.com/repos/synthetic/project/releases/assets/1"},{"name":"synthetic.exe","apiUrl":"https://api.github.com/repos/synthetic/project/releases/assets/2"}]}\n'
 elif [ "$1 $2" = "release view" ]; then
   exit 1
-elif [ "$1" = api ] && [[ "$*" == *'/releases/tags/'* ]]; then
-  printf '{"assets":[{"id":1,"name":"synthetic.deb"},{"id":2,"name":"synthetic.exe"}]}\n'
 elif [ "$1" = api ] && [[ "$*" == *'--paginate repos/synthetic/project/releases?per_page=100 --jq'* ]]; then
   cat "$RELEASE_HISTORY_FIXTURE"
 else
@@ -34,7 +34,9 @@ if [ "$1" = ls-remote ] && [[ "$*" == *'refs/heads/main'* ]]; then
 elif [ "$1" = ls-remote ] && [[ "$*" == *'--exit-code'* ]]; then
   exit 1
 elif [ "$1" = ls-remote ]; then
-  printf '%s\trefs/tags/synthetic\n' "${REMOTE_TAG_SHA:-target-sha}"
+  if [ "${REMOTE_TAG_ABSENT:-false}" != true ]; then
+    printf '%s\trefs/tags/synthetic\n' "${REMOTE_TAG_SHA:-target-sha}"
+  fi
 else
   exit 2
 fi
@@ -96,6 +98,9 @@ if run_preflight 2026.9.15-8 env REMOTE_TAG_SHA=target-sha; then
   exit 1
 fi
 
+printf 'TEST draft preflight accepts exact source before tag creation\n'
+run_preflight 2026.9.17-10 env REMOTE_TAG_ABSENT=true
+
 printf 'TEST published rerun still requires exact source\n'
 if run_preflight 2026.9.14-4 env REMOTE_TAG_SHA=wrong-sha; then
   printf 'published rerun accepted the wrong source\n' >&2
@@ -155,6 +160,21 @@ if PATH="$mock_bin:$PATH" GITHUB_REPOSITORY=synthetic/project MINISIGN_ASSET_DIR
   printf 'published release entered mutating finalization\n' >&2
   exit 1
 fi
+
+draft_dir="$fixture_root/draft"
+cp -R "$asset_dir" "$draft_dir"
+mv "$draft_dir/ds-controller-windows-v2026.9.14-4.zip" "$draft_dir/ds-controller-windows-v2026.9.17-10.zip"
+mv "$draft_dir/ds-controller-ubuntu-v2026.9.14-4.zip" "$draft_dir/ds-controller-ubuntu-v2026.9.17-10.zip"
+VERSION=2026.9.17-10 python3 - "$draft_dir/latest.json" <<'PY'
+import json, os, pathlib, sys
+p = pathlib.Path(sys.argv[1])
+data = json.loads(p.read_text())
+data["version"] = os.environ["VERSION"]
+p.write_text(json.dumps(data))
+PY
+printf 'TEST draft finalization accepts exact source before tag creation\n'
+PATH="$mock_bin:$PATH" GITHUB_REPOSITORY=synthetic/project MINISIGN_ASSET_DIR="$draft_dir" REMOTE_TAG_ABSENT=true REMOTE_MAIN_SHA=target-sha \
+  bash "$repo_root/scripts/finalize-release.sh" "$draft_dir" 2026.9.17-10 v2026.9.17-10 target-sha cHVi
 
 printf 'TEST published verification fails when minisign rejects a payload\n'
 if PATH="$mock_bin:$PATH" GITHUB_REPOSITORY=synthetic/project VERIFY_ONLY=true MINISIGN_ASSET_DIR="$asset_dir" \
