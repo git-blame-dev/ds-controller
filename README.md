@@ -31,7 +31,7 @@ The project includes both sides of the system: a Nintendo DS ROM for the sender 
 - **PC receiver backend:** Rust, UDP socket handling, ViGEm on Windows, and `evdev`/`uinput` on Ubuntu.
 - **Desktop UI:** Tauri 2, React 19, TypeScript, Vite, and pnpm.
 - **Build / release tooling:** Make targets for deterministic tests, DS ROM builds, Ubuntu Debian packages, and Linux-first Windows cross-builds.
-- **CI / artifacts:** GitHub Actions release workflow with complete Windows and Ubuntu bundles, each including the NDS ROM and example configuration.
+- **CI / artifacts:** GitHub Actions builds signed Windows NSIS updates and complete Windows/Ubuntu convenience bundles, each including the NDS ROM and example configuration.
 
 ## 🧠 Engineering Highlights
 
@@ -159,7 +159,7 @@ sudo apt install ./dist/linux/ds-controller-linux-amd64.deb
 
 Installation adds a udev rule that grants the active desktop user access to `/dev/uinput`. DS Controller itself runs as the normal user; do not run the GUI with `sudo`.
 
-Cross-build the Windows PC GUI app from Linux:
+Cross-build the unsigned current-user Windows NSIS installer from Linux:
 
 ```sh
 make pc
@@ -171,9 +171,9 @@ To stage all three local release artifacts:
 make dist
 ```
 
-The staged Ubuntu package lands in `dist/linux/`, Windows app files land in `dist/pc/`, and DS files land in `dist/nds/`.
+The staged Ubuntu package lands in `dist/linux/`, the Windows installer lands in `dist/pc/`, and DS files land in `dist/nds/`.
 
-`make pc` requires LLVM tools, `cargo-xwin`, and the Windows MSVC Rust target:
+`make pc` requires LLVM and NSIS tools, `cargo-xwin`, and the Windows MSVC Rust target:
 
 ```sh
 rustup target add x86_64-pc-windows-msvc
@@ -184,15 +184,15 @@ Install LLVM tools with one of:
 
 ```sh
 # Ubuntu / WSL
-sudo apt install clang lld llvm
+sudo apt install clang lld llvm nsis
 
 # CachyOS / Arch
-sudo pacman -S --needed clang lld llvm
+sudo pacman -S --needed clang lld llvm nsis
 ```
 
 ### Run
 
-Copy `dist/pc/ds-controller.exe` and `dist/pc/WebView2Loader.dll` to the same folder on the Windows PC, then run `ds-controller.exe`. The receiver starts automatically when **Start receiver when app opens** is enabled. You can change the UDP port, use **Apply & Restart**, and view receiver logs in the app.
+Run `dist/pc/ds-controller-windows-x86_64-setup.exe` on the Windows PC. It installs DS Controller for the current user. The receiver starts automatically when **Start receiver when app opens** is enabled. You can change the UDP port, use **Apply & Restart**, and view receiver logs in the app.
 
 On Ubuntu, install the `.deb` and launch **DS Controller** from the application menu or run `ds-controller`. The package configures `/dev/uinput` access, and the app creates a `DS Controller Virtual Gamepad` while the receiver is running.
 
@@ -226,24 +226,29 @@ For a manual PC GUI smoke check, run the app in development mode:
 make app-dev
 ```
 
-Lean local workflow: `make test` validates the code; `make linux-verify` builds and inspects the Ubuntu package; `make dist` stages all release artifacts.
+Lean local workflow: `make test` validates the code; `make linux-verify` builds and inspects the Ubuntu package; `make pc` cross-builds the unsigned NSIS installer; and `make dist` stages all local distribution artifacts. Local builds do not create signed updater payloads.
 
-CI runs deterministic tests, builds and verifies the Ubuntu package, cross-builds the Windows app, builds the NDS ROM, and stages artifacts under `dist/linux`, `dist/pc`, and `dist/nds`.
+CI runs deterministic tests on pull requests and `main`. A successful `main` push builds the ROM once, then uses the pinned official Tauri action to build and sign the Debian and NSIS updater payloads sequentially, validate them, upload convenience ZIPs and checksums to a draft, and publish it automatically.
 
 The DS host tests cover packet encoding, input mapping, and display wake policy. Hardware behavior such as Wi-Fi association, backlight control, WebView2 startup, ViGEmBus integration, Linux game detection, firewall prompts, and real controller output still requires manual platform and DS validation.
 
 ## 📦 Releases / Artifacts
 
-New [GitHub Releases](https://github.com/git-blame-dev/ds-controller/releases) publish two complete bundles: `ds-controller-windows-vTAG.zip` and `ds-controller-ubuntu-vTAG.zip`. Both include the NDS ROM and `ds-controller.ini`; the Ubuntu bundle contains the installable `.deb`. Older releases remain unchanged and may use the previous generic ZIP and direct `.deb` layout.
+New [GitHub Releases](https://github.com/git-blame-dev/ds-controller/releases) publish directly signed current-user NSIS and Debian updater payloads, their `.sig` files, `latest.json`, `SHA256SUMS`, and two convenience bundles: `ds-controller-windows-vTAG.zip` and `ds-controller-ubuntu-vTAG.zip`. Both ZIPs include the NDS ROM and `ds-controller.ini`; each also contains its platform installer. The ZIPs are installation conveniences, not updater payloads.
+
+Installed release builds check for an update in the background and download it when **Automatically check and download updates when the app opens** is enabled. Network failures do not stop the receiver. Installation begins only after **Restart and update** is selected. **Later** discards the verified download and suppresses automatic rediscovery until a manual check or the next app session. The desktop updater does not update the DS ROM or `ds-controller.ini`.
+
+Windows uses the standard current-user NSIS updater and relaunch behavior. Ubuntu uses Tauri's Debian updater path and may request administrator authentication. If a Debian installation returns an error, DS Controller conservatively disables receiver starts until the app is restarted and the package state is checked.
+
+Release setup requires a Tauri updater keypair created and backed up outside the repository. The public key is embedded in the application configuration; configure the private key and password as `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` Actions secrets. Losing or replacing the private/public key pair requires an explicit client migration or manual reinstall strategy.
 
 For local builds and manual testing, artifacts are staged at:
 
 - DS files: `dist/nds/`
 - Ubuntu package: `dist/linux/ds-controller-linux-amd64.deb`
-- Windows executable: `dist/pc/ds-controller.exe`
-- WebView2 loader DLL: `dist/pc/WebView2Loader.dll`
+- Windows installer: `dist/pc/ds-controller-windows-x86_64-setup.exe`
 
-When testing manually on Windows, keep `ds-controller.exe` and `WebView2Loader.dll` together. On Ubuntu, install the `.deb` so its package-owned udev rule is applied. CI uploads all three staged artifact directories.
+On Ubuntu, install the `.deb` so its package-owned udev rule is applied. A local package build proves artifact creation only; signed old-to-new updates, installer launch/relaunch, single-instance behavior, Windows WebView2/ViGEmBus, Linux authentication/package repair, firewall behavior, DS Wi-Fi, and real controller output still require tests on the target systems. Close legacy portable copies manually before installing the first updater-enabled release.
 
 ## ⚠️ Limitations
 
