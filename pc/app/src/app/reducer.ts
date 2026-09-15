@@ -5,8 +5,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   port: 26760,
   startReceiverWhenAppOpens: true,
   packetLoggingEnabled: false,
+  autoDownloadUpdates: true,
 })
-
 const DEFAULT_RUNTIME_STATUS: RuntimeStatus = Object.freeze({
   receiver: Object.freeze({ kind: "idle" }),
   virtualController: Object.freeze({ kind: "unknown" }),
@@ -67,7 +67,7 @@ return { ...state, runtimeStatus: action.runtimeStatus }
       }
     case "logReceived":
       return { ...state, logs: capLogEntries([...state.logs, action.entry]) }
-    case "logsReceived":
+case "logsReceived":
       return { ...state, logs: capLogEntries([...state.logs, ...action.entries]) }
   }
 }
@@ -80,6 +80,7 @@ function settingsEqual(left: AppSettings, right: AppSettings): boolean {
   return (
     left.port === right.port &&
     left.startReceiverWhenAppOpens === right.startReceiverWhenAppOpens &&
-    left.packetLoggingEnabled === right.packetLoggingEnabled
+    left.packetLoggingEnabled === right.packetLoggingEnabled &&
+    left.autoDownloadUpdates === right.autoDownloadUpdates
   )
 }

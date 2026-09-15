@@ -1,13 +1,14 @@
 import { listen, type Event, type UnlistenFn } from "@tauri-apps/api/event"
 
-import type { AppSettings, DsButton, LogEntry, RuntimeStatus, ValidationResult } from "./types"
-import { isAppSettings, isDsButtonArray, isLogEntry, parseRuntimeStatus } from "./validation"
+import type { AppSettings, DsButton, LogEntry, RuntimeStatus, UpdateSnapshot, ValidationResult } from "./types"
+import { isAppSettings, isDsButtonArray, isLogEntry, isUpdateSnapshot, parseRuntimeStatus } from "./validation"
 
 export const TAURI_EVENT_NAMES = Object.freeze({
 settingsChanged: "settings://changed",
 runtimeStatusChanged: "receiver://status",
 logEntry: "receiver://log",
-pressedButtonsChanged: "receiver://buttons",
+  pressedButtonsChanged: "receiver://buttons",
+  updaterSnapshot: "updater://snapshot",
 })
 
 export function listenToSettingsChanged(handler: (settings: AppSettings) => void): Promise<UnlistenFn> {
@@ -20,6 +21,9 @@ return listenToParsedEvent(TAURI_EVENT_NAMES.runtimeStatusChanged, parseRuntimeS
 
 export function listenToLogEntry(handler: (entry: LogEntry) => void): Promise<UnlistenFn> {
   return listenToValidatedEvent(TAURI_EVENT_NAMES.logEntry, isLogEntry, handler)
+}
+export function listenToUpdateSnapshot(handler: (snapshot: UpdateSnapshot) => void): Promise<UnlistenFn> {
+  return listenToValidatedEvent(TAURI_EVENT_NAMES.updaterSnapshot, isUpdateSnapshot, handler)
 }
 
 export function listenToPressedButtonsChanged(handler: (pressedButtons: readonly DsButton[]) => void): Promise<UnlistenFn> {

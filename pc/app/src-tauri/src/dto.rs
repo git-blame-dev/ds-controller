@@ -9,6 +9,7 @@ pub struct AppSettingsDto {
     pub port: u16,
     pub start_receiver_when_app_opens: bool,
     pub packet_logging_enabled: bool,
+    pub auto_download_updates: bool,
 }
 
 impl From<AppSettings> for AppSettingsDto {
@@ -17,6 +18,7 @@ impl From<AppSettings> for AppSettingsDto {
             port: settings.port,
             start_receiver_when_app_opens: settings.start_receiver_when_app_opens,
             packet_logging_enabled: settings.packet_logging_enabled,
+            auto_download_updates: settings.auto_download_updates,
         }
     }
 }
@@ -27,6 +29,7 @@ impl From<AppSettingsDto> for AppSettings {
             port: settings.port,
             start_receiver_when_app_opens: settings.start_receiver_when_app_opens,
             packet_logging_enabled: settings.packet_logging_enabled,
+            auto_download_updates: settings.auto_download_updates,
             timeout_ms: AppSettings::default().timeout_ms,
         }
     }
@@ -143,6 +146,13 @@ impl CommandErrorDto {
     pub fn receiver_error(message: impl Into<String>) -> Self {
         Self {
             code: "receiverError".to_owned(),
+            message: message.into(),
+        }
+    }
+
+    pub fn updater_error(message: impl Into<String>) -> Self {
+        Self {
+            code: "updaterError".to_owned(),
             message: message.into(),
         }
     }

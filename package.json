@@ -2,6 +2,6 @@
   "private": true,
   "packageManager": "pnpm@10.15.1",
   "devDependencies": {
-    "@tauri-apps/cli": "^2.8.4"
+    "@tauri-apps/cli": "2.11.1"
   }
 }

@@ -8,6 +8,22 @@ export interface AppSettings {
   readonly port: number
   readonly startReceiverWhenAppOpens: boolean
   readonly packetLoggingEnabled: boolean
+  readonly autoDownloadUpdates: boolean
+}
+
+export type UpdatePhase = "idle" | "unavailable" | "available" | "downloading" | "ready" | "installing" | "restartRequired"
+export type UpdateOperation = "check" | "download" | "install"
+export interface UpdateSnapshot {
+  readonly revision: number
+  readonly phase: UpdatePhase
+  readonly operation: UpdateOperation | null
+  readonly currentVersion: string
+  readonly availableVersion: string | null
+  readonly notes: string | null
+  readonly downloadedBytes: number
+  readonly totalBytes: number | null
+  readonly error: string | null
+  readonly autoDownloadEnabled: boolean
 }
 
 export type ReceiverStatus =

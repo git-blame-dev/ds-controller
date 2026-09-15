@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core"
 
-import type { AppSettings, RuntimeStatus } from "./types"
-import { isAppSettings, parseRuntimeStatus } from "./validation"
+import type { AppSettings, RuntimeStatus, UpdateSnapshot } from "./types"
+import { isAppSettings, isUpdateSnapshot, parseRuntimeStatus } from "./validation"
 
 export async function getSettings(): Promise<AppSettings> {
   const payload = await invoke<unknown>("get_settings")
@@ -36,6 +36,17 @@ return parseCommandPayload(payload, parseRuntimeStatus, "stop_receiver")
 export async function restartReceiver(): Promise<RuntimeStatus> {
 const payload = await invoke<unknown>("restart_receiver")
 return parseCommandPayload(payload, parseRuntimeStatus, "restart_receiver")
+}
+export async function getUpdateSnapshot() { return updateCommand("get_update_snapshot") }
+export async function checkForUpdate() { return updateCommand("check_for_update") }
+export async function downloadUpdate() { return updateCommand("download_update") }
+export async function deferUpdate() { return updateCommand("defer_update") }
+export async function installUpdate() { return updateCommand("install_update") }
+export async function setAutoDownloadUpdates(enabled: boolean) {
+  return updateCommand("set_auto_download_updates", { enabled })
+}
+async function updateCommand(command: string, args?: Record<string, unknown>): Promise<UpdateSnapshot> {
+  return validateCommandPayload(await invoke<unknown>(command, args), isUpdateSnapshot, command)
 }
 
 function validateCommandPayload<TValue>(

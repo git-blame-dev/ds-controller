@@ -27,11 +27,17 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["deb", "nsis"],
+    "createUpdaterArtifacts": false,
     "category": "Utility",
     "shortDescription": "Nintendo DS Wi-Fi controller receiver",
     "longDescription": "Receive Nintendo DS button input over UDP and expose it through a virtual game controller.",
     "icon": ["icons/icon.png", "icons/icon.ico"],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
     "linux": {
       "deb": {
         "section": "utils",
@@ -41,6 +47,14 @@
         "postInstallScript": "linux/reload-uinput-rules.sh",
         "postRemoveScript": "linux/reload-uinput-rules.sh"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/git-blame-dev/ds-controller/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQyODgxNEE4MjM5RTcyNEIKUldSTGNwNGpxQlNJUWpxYXpEZWhqVHFMcStZNi9YSTI0OXlvM1BXdklaSVY4Z0w4ZkZlNUZ5Ym4K"
     }
   }
 }

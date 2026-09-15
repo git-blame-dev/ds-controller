@@ -1,4 +1,4 @@
-import type { AppSettings, DsButton, LogEntry, LogLevel, ReceiverStatus, RuntimeStatus, ValidationResult, VirtualControllerStatus } from "./types"
+import type { AppSettings, DsButton, LogEntry, LogLevel, ReceiverStatus, RuntimeStatus, UpdateSnapshot, ValidationResult, VirtualControllerStatus } from "./types"
 import { DS_BUTTONS } from "./types"
 
 const PORT_ERROR = "Port must be a whole number between 1 and 65535."
@@ -29,8 +29,29 @@ export function isAppSettings(value: unknown): value is AppSettings {
   return (
     isValidPort(value.port) &&
     typeof value.startReceiverWhenAppOpens === "boolean" &&
-    typeof value.packetLoggingEnabled === "boolean"
+    typeof value.packetLoggingEnabled === "boolean" &&
+    typeof value.autoDownloadUpdates === "boolean"
   )
+}
+
+export function isUpdateSnapshot(value: unknown): value is UpdateSnapshot {
+  if (
+    !isRecord(value) ||
+    !Number.isSafeInteger(value.revision) ||
+    (value.revision as number) < 0 ||
+    typeof value.phase !== "string" ||
+    typeof value.currentVersion !== "string" ||
+    !(value.availableVersion === null || typeof value.availableVersion === "string") ||
+    !(value.notes === null || typeof value.notes === "string") ||
+    typeof value.downloadedBytes !== "number" ||
+    !(value.totalBytes === null || typeof value.totalBytes === "number") ||
+    !(value.error === null || typeof value.error === "string") ||
+    typeof value.autoDownloadEnabled !== "boolean"
+  ) return false
+  return ["idle", "unavailable", "available", "downloading", "ready", "installing", "restartRequired"].includes(value.phase) &&
+    (value.operation === null || (typeof value.operation === "string" && ["check", "download", "install"].includes(value.operation))) &&
+    Number.isSafeInteger(value.downloadedBytes) && value.downloadedBytes >= 0 &&
+    (value.totalBytes === null || (Number.isSafeInteger(value.totalBytes) && value.totalBytes >= 0))
 }
 
 export function isRuntimeStatus(value: unknown): value is RuntimeStatus {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 
-import { parseRuntimeStatus, validatePortInput } from "./validation"
+import { isUpdateSnapshot, parseRuntimeStatus, validatePortInput } from "./validation"
 
 describe("validatePortInput", () => {
   test("accepts the default receiver port", () => {
@@ -19,6 +19,18 @@ describe("validatePortInput", () => {
       ok: false,
       error: "Port must be a whole number between 1 and 65535.",
     })
+  })
+})
+
+describe("isUpdateSnapshot", () => {
+  const snapshot = { revision: 1, phase: "downloading", operation: "download", currentVersion: "1.0.0", availableVersion: "1.1.0", notes: null, downloadedBytes: 10, totalBytes: null, error: null, autoDownloadEnabled: true }
+  test("accepts unknown download totals", () => expect(isUpdateSnapshot(snapshot)).toBe(true))
+  test("accepts unavailable update metadata", () => expect(isUpdateSnapshot({ ...snapshot, phase: "unavailable", operation: null })).toBe(true))
+  test("rejects unknown phases", () => expect(isUpdateSnapshot({ ...snapshot, phase: "broken" })).toBe(false))
+  test("rejects snapshots without a revision", () => {
+    const withoutRevision = { ...snapshot }
+    Reflect.deleteProperty(withoutRevision, "revision")
+    expect(isUpdateSnapshot(withoutRevision)).toBe(false)
   })
 })
 

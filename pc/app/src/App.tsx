@@ -1,19 +1,25 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react"
 
 import { appReducer, createInitialAppState } from "./app/reducer"
 import { getRuntimeStatus, getSettings, restartReceiver, saveSettings, setPacketLoggingEnabled, startReceiver, stopReceiver } from "./app/tauriCommands"
 import { listenToLogEntry, listenToRuntimeStatusChanged, listenToSettingsChanged } from "./app/tauriEvents"
 import type { AppSettings, LogEntry } from "./app/types"
 import { validatePortInput } from "./app/validation"
+import { useUpdater } from "./app/useUpdater"
 import { LogPanel } from "./components/LogPanel"
 import { ReceiverCard } from "./components/ReceiverCard"
+import { UpdaterCard } from "./components/UpdaterCard"
 
 export function App() {
 const [state, dispatch] = useReducer(appReducer, undefined, createInitialAppState)
 const [portInput, setPortInput] = useState(String(state.draftSettings.port))
 const packetLoggingSaveChain = useRef<Promise<void>>(Promise.resolve())
 const packetLoggingRequestId = useRef(0)
-const portValidation = useMemo(() => validatePortInput(portInput), [portInput])
+  const portValidation = useMemo(() => validatePortInput(portInput), [portInput])
+  const reportUpdaterError = useCallback((error: unknown) => {
+    dispatch({ type: "logReceived", entry: createLocalLog("error", describeError(error)) })
+  }, [])
+  const updater = useUpdater(reportUpdaterError)
 
 useEffect(() => {
 let shouldApplyResponses = true
@@ -114,12 +120,11 @@ dispatch({ type: "logReceived", entry: createLocalLog("error", describeError(err
 }
 }
 
-async function handleApplyRestart() {
+  async function handleApplyRestart() {
 if (!portValidation.ok) {
 dispatch({ type: "logReceived", entry: createLocalLog("error", portValidation.error) })
 return
 }
-
 const settings = { ...state.draftSettings, port: portValidation.value }
 await runCommand(async () => {
 const savedSettings = await saveSettings(settings)
@@ -154,6 +159,15 @@ const runtimeStatus = await stopReceiver()
 dispatch({ type: "runtimeStatusReceived", runtimeStatus })
 })}
 onApplyRestart={() => void handleApplyRestart()}
+/>
+<UpdaterCard
+snapshot={updater.snapshot}
+onAction={(action) => {
+if (action === "defer") void updater.defer()
+else if (action === "retry") void updater.retry()
+else void updater.command(action)
+}}
+onAutoDownload={(enabled) => void updater.setAutoDownload(enabled)}
 />
 <LogPanel logs={state.logs} />
 </div>
