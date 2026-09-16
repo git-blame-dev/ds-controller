@@ -47,7 +47,7 @@ export function UpdaterCard({ snapshot, onAction, onAutoDownload }: UpdaterCardP
           <input
             role="switch"
             type="checkbox"
-            aria-label="Automatically check and download updates when the app opens"
+            aria-label="Automatically download updates when the app opens"
             checked={snapshot.autoDownloadEnabled}
             disabled={busy}
             onChange={(event) => onAutoDownload(event.target.checked)}

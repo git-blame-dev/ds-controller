@@ -58,6 +58,8 @@ pub enum UpdateSessionError {
     NoAvailableUpdate,
     NoReadyUpdate,
     AutomaticCheckSuppressed,
+    RetainedUpdate,
+    RestartRequired,
 }
 
 enum InstallPreparation<T> {
@@ -154,6 +156,8 @@ impl fmt::Display for UpdateSessionError {
             Self::AutomaticCheckSuppressed => {
                 "automatic update checks are deferred for this session"
             }
+            Self::RetainedUpdate => "the retained update must be downloaded or installed first",
+            Self::RestartRequired => "restart is required before another update operation",
         };
         formatter.write_str(message)
     }
@@ -200,6 +204,17 @@ impl<T> UpdateSession<T> {
     ) -> Result<OperationReservation, UpdateSessionError> {
         if self.active_operation_id.is_some() {
             return Err(UpdateSessionError::Busy);
+        }
+        if self.snapshot.phase == UpdatePhase::RestartRequired {
+            return Err(UpdateSessionError::RestartRequired);
+        }
+        if operation == UpdateOperation::Check
+            && matches!(
+                self.snapshot.phase,
+                UpdatePhase::Available | UpdatePhase::Ready
+            )
+        {
+            return Err(UpdateSessionError::RetainedUpdate);
         }
         if operation == UpdateOperation::Check && !manual && self.automatic_checks_suppressed {
             return Err(UpdateSessionError::AutomaticCheckSuppressed);
@@ -334,6 +349,15 @@ impl<T> UpdateSession<T> {
         }
     }
 
+    fn finish_lost_install_operation(&mut self, message: String) {
+        self.active_operation_id = None;
+        self.snapshot.operation = None;
+        self.resource = None;
+        self.snapshot.phase = UpdatePhase::RestartRequired;
+        self.snapshot.error = Some(message);
+        self.bump_revision();
+    }
+
     pub fn defer(&mut self) -> Result<(), UpdateSessionError> {
         if self.active_operation_id.is_some() {
             return Err(UpdateSessionError::Busy);
@@ -390,16 +414,84 @@ impl<T> UpdateSession<T> {
 
 pub fn start_background_check(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        let enabled = app
-            .state::<AppState>()
-            .updater()
-            .lock()
-            .map(|session| session.snapshot().auto_download_enabled)
-            .unwrap_or(false);
-        if enabled {
-            let _ = perform_check(app, false).await;
-        }
+        let _ = perform_check(app, false).await;
     });
+}
+
+fn finish_lost_install_task<T>(
+    receiver: &Mutex<ReceiverController>,
+    updater: &Mutex<UpdateSession<T>>,
+    message: String,
+) -> UpdateSnapshot {
+    let mut receiver_guard = match receiver.lock() {
+        Ok(receiver) => receiver,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    receiver_guard.finish_install_preparation_failure(StopOutcome {
+        worker_terminated: false,
+        neutral: false,
+    });
+    receiver.clear_poison();
+    drop(receiver_guard);
+
+    let mut session = match updater.lock() {
+        Ok(session) => session,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+    session.finish_lost_install_operation(message);
+    let snapshot = session.snapshot();
+    updater.clear_poison();
+    drop(session);
+    snapshot
+}
+
+fn finish_returned_install_error<T>(
+    receiver: &Mutex<ReceiverController>,
+    updater: &Mutex<UpdateSession<T>>,
+    reservation: OperationReservation,
+    update: T,
+    bytes: Vec<u8>,
+    message: String,
+) -> Result<UpdateSnapshot, CommandErrorDto> {
+    if receiver.is_poisoned() || updater.is_poisoned() {
+        return Ok(finish_lost_install_task(receiver, updater, message));
+    }
+
+    let mut receiver_guard = match receiver.lock() {
+        Ok(receiver) => receiver,
+        Err(poisoned) => {
+            drop(poisoned.into_inner());
+            return Ok(finish_lost_install_task(receiver, updater, message));
+        }
+    };
+    #[cfg(target_os = "linux")]
+    receiver_guard.mark_install_failure(true);
+    #[cfg(windows)]
+    receiver_guard.mark_install_failure(false);
+    drop(receiver_guard);
+
+    let mut session = match updater.lock() {
+        Ok(session) => session,
+        Err(poisoned) => {
+            drop(poisoned.into_inner());
+            return Ok(finish_lost_install_task(receiver, updater, message));
+        }
+    };
+    #[cfg(target_os = "linux")]
+    {
+        let _ = (update, bytes);
+        session.finish_restart_required(reservation, message);
+    }
+    #[cfg(windows)]
+    session.restore_ready(reservation, update, bytes, message);
+    #[cfg(not(any(target_os = "linux", windows)))]
+    {
+        let _ = (reservation, update, bytes, message);
+        return Err(CommandErrorDto::updater_error(
+            "unsupported update platform",
+        ));
+    }
+    Ok(session.snapshot())
 }
 
 #[tauri::command]
@@ -427,7 +519,7 @@ pub async fn install_update(app: AppHandle) -> Result<UpdateSnapshot, CommandErr
     let stop_receiver = receiver.clone();
     let stop_app = app.clone();
     let publish_app = app.clone();
-    let preparation = tauri::async_runtime::spawn_blocking(move || {
+    let preparation_task = tauri::async_runtime::spawn_blocking(move || {
         prepare_install(
             &preparation_receiver,
             &preparation_updater,
@@ -453,8 +545,21 @@ pub async fn install_update(app: AppHandle) -> Result<UpdateSnapshot, CommandErr
             },
         )
     })
-    .await
-    .map_err(|error| CommandErrorDto::updater_error(error.to_string()))?;
+    .await;
+    let preparation = match preparation_task {
+        Ok(preparation) => preparation,
+        Err(error) => {
+            let snapshot = finish_lost_install_task(
+                &receiver,
+                &updater_state,
+                format!(
+                    "update preparation task was lost: {error}. Restart DS Controller before using the receiver."
+                ),
+            );
+            let _ = app.emit(SNAPSHOT_EVENT, snapshot.clone());
+            return Ok(snapshot);
+        }
+    };
     let (reservation, update, bytes) = match preparation? {
         InstallPreparation::Proceed {
             reservation,
@@ -464,12 +569,23 @@ pub async fn install_update(app: AppHandle) -> Result<UpdateSnapshot, CommandErr
         InstallPreparation::Blocked(snapshot) => return Ok(snapshot),
     };
 
-    let install_result = tauri::async_runtime::spawn_blocking(move || {
+    let install_task = tauri::async_runtime::spawn_blocking(move || {
         let result = update.install(&bytes).map_err(|error| error.to_string());
         (result, update, bytes)
     })
-    .await
-    .map_err(|error| CommandErrorDto::updater_error(error.to_string()))?;
+    .await;
+    let install_result = match install_task {
+        Ok(result) => result,
+        Err(error) => {
+            let snapshot = finish_lost_install_task(
+                &receiver,
+                &updater_state,
+                format!("installer task was lost: {error}"),
+            );
+            let _ = app.emit(SNAPSHOT_EVENT, snapshot.clone());
+            return Ok(snapshot);
+        }
+    };
 
     match install_result {
         (Ok(()), _, _) => {
@@ -485,48 +601,21 @@ pub async fn install_update(app: AppHandle) -> Result<UpdateSnapshot, CommandErr
         }
         (Err(message), update, bytes) => {
             #[cfg(target_os = "linux")]
-            {
-                let _ = (&update, &bytes);
-                if let Ok(mut receiver) = receiver.lock() {
-                    receiver.mark_install_failure(true);
-                }
-                let snapshot = {
-                    let mut session = updater_state
-                        .lock()
-                        .map_err(|_| CommandErrorDto::state_unavailable())?;
-                    session.finish_restart_required(
-                        reservation,
-                        format!(
-                            "{message}. Restart DS Controller and check the Debian package state before using the receiver."
-                        ),
-                    );
-                    session.snapshot()
-                };
-                let _ = app.emit(SNAPSHOT_EVENT, snapshot.clone());
-                Ok(snapshot)
-            }
+            let message = format!(
+                "{message}. Restart DS Controller and check the Debian package state before using the receiver."
+            );
             #[cfg(windows)]
-            {
-                if let Ok(mut receiver) = receiver.lock() {
-                    receiver.mark_install_failure(false);
-                }
-                let snapshot = {
-                    let mut session = updater_state
-                        .lock()
-                        .map_err(|_| CommandErrorDto::state_unavailable())?;
-                    session.restore_ready(reservation, update, bytes, message);
-                    session.snapshot()
-                };
-                let _ = app.emit(SNAPSHOT_EVENT, snapshot.clone());
-                Ok(snapshot)
-            }
-            #[cfg(not(any(target_os = "linux", windows)))]
-            {
-                let _ = (message, update, bytes);
-                Err(CommandErrorDto::updater_error(
-                    "unsupported update platform",
-                ))
-            }
+            let message = message;
+            let snapshot = finish_returned_install_error(
+                &receiver,
+                &updater_state,
+                reservation,
+                update,
+                bytes,
+                message,
+            )?;
+            let _ = app.emit(SNAPSHOT_EVENT, snapshot.clone());
+            Ok(snapshot)
         }
     }
 }
@@ -748,6 +837,19 @@ mod tests {
     }
 
     #[test]
+    fn automatic_startup_check_is_allowed_when_auto_download_is_disabled() {
+        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), false);
+
+        let reservation = session
+            .reserve(UpdateOperation::Check, false)
+            .expect("startup metadata check reserves independently of download preference");
+
+        assert_eq!(session.snapshot().operation, Some(UpdateOperation::Check));
+        session.finish_unavailable(reservation);
+        assert!(!session.snapshot().auto_download_enabled);
+    }
+
+    #[test]
     fn install_preparation_proceeds_after_reserving_and_stopping_neutral_worker() {
         let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
         let updater = ready_session();
@@ -801,6 +903,183 @@ mod tests {
     }
 
     #[test]
+    fn panicked_preparation_task_requires_restart_and_allows_close() {
+        let receiver = Arc::new(Mutex::new(
+            crate::receiver_task::ReceiverController::default(),
+        ));
+        let updater = Arc::new(ready_session());
+        let task_receiver = Arc::clone(&receiver);
+        let task_updater = Arc::clone(&updater);
+
+        let task = tauri::async_runtime::block_on(async move {
+            tauri::async_runtime::spawn_blocking(move || {
+                prepare_install(
+                    &task_receiver,
+                    &task_updater,
+                    || panic!("synthetic stop callback panic"),
+                    |_| {},
+                )
+            })
+            .await
+        });
+        assert!(task.is_err());
+
+        let snapshot = finish_lost_install_task(
+            &receiver,
+            &updater,
+            "synthetic preparation task loss".to_owned(),
+        );
+
+        assert_eq!(snapshot.phase, UpdatePhase::RestartRequired);
+        assert_eq!(snapshot.operation, None);
+        assert!(!updater.lock().unwrap().has_payload());
+        let mut receiver = receiver.lock().unwrap();
+        assert!(receiver.ordinary_exit_requested());
+        assert!(receiver.reserve_install().is_err());
+    }
+
+    #[test]
+    fn preparation_panic_while_receiver_locked_recovers_close_access() {
+        let receiver = Arc::new(Mutex::new(
+            crate::receiver_task::ReceiverController::default(),
+        ));
+        let updater = Arc::new(ready_session());
+        let task_receiver = Arc::clone(&receiver);
+        let task_updater = Arc::clone(&updater);
+        let panic_receiver = Arc::clone(&receiver);
+
+        let task = tauri::async_runtime::block_on(async move {
+            tauri::async_runtime::spawn_blocking(move || {
+                prepare_install(
+                    &task_receiver,
+                    &task_updater,
+                    || {
+                        let _receiver = panic_receiver.lock().unwrap();
+                        panic!("synthetic panic while receiver is locked");
+                    },
+                    |_| {},
+                )
+            })
+            .await
+        });
+        assert!(task.is_err());
+        assert!(receiver.is_poisoned());
+
+        let snapshot = finish_lost_install_task(
+            &receiver,
+            &updater,
+            "synthetic preparation task loss".to_owned(),
+        );
+
+        assert_eq!(snapshot.phase, UpdatePhase::RestartRequired);
+        assert!(!receiver.is_poisoned());
+        assert!(receiver.lock().unwrap().ordinary_exit_requested());
+    }
+
+    #[test]
+    fn preparation_panic_while_updater_locked_recovers_restart_state() {
+        let receiver = Arc::new(Mutex::new(
+            crate::receiver_task::ReceiverController::default(),
+        ));
+        let updater = Arc::new(ready_session());
+        let task_receiver = Arc::clone(&receiver);
+        let task_updater = Arc::clone(&updater);
+
+        let task = tauri::async_runtime::block_on(async move {
+            tauri::async_runtime::spawn_blocking(move || {
+                prepare_install(
+                    &task_receiver,
+                    &task_updater,
+                    || stop_outcome(true, true),
+                    |_| panic!("synthetic publish panic while updater is locked"),
+                )
+            })
+            .await
+        });
+        assert!(task.is_err());
+        assert!(updater.is_poisoned());
+
+        let snapshot = finish_lost_install_task(
+            &receiver,
+            &updater,
+            "synthetic preparation task loss".to_owned(),
+        );
+
+        assert_eq!(snapshot.phase, UpdatePhase::RestartRequired);
+        assert!(!updater.is_poisoned());
+        assert_eq!(updater.lock().unwrap().snapshot(), snapshot);
+        assert!(receiver.lock().unwrap().ordinary_exit_requested());
+    }
+
+    #[test]
+    fn panicked_installer_task_requires_restart_on_every_platform() {
+        let receiver = Arc::new(Mutex::new(
+            crate::receiver_task::ReceiverController::default(),
+        ));
+        let updater = Arc::new(ready_session());
+        receiver.lock().unwrap().reserve_install().unwrap();
+        let reservation = updater
+            .lock()
+            .unwrap()
+            .reserve(UpdateOperation::Install, true)
+            .unwrap();
+        updater.lock().unwrap().take_ready(reservation).unwrap();
+
+        let task = tauri::async_runtime::block_on(async {
+            tauri::async_runtime::spawn_blocking(|| panic!("synthetic installer panic")).await
+        });
+        assert!(task.is_err());
+
+        let snapshot = finish_lost_install_task(
+            &receiver,
+            &updater,
+            "synthetic installer task loss".to_owned(),
+        );
+
+        assert_eq!(snapshot.phase, UpdatePhase::RestartRequired);
+        assert_eq!(snapshot.operation, None);
+        assert!(receiver.lock().unwrap().ordinary_exit_requested());
+    }
+
+    #[test]
+    fn returned_installer_error_with_poisoned_receiver_discards_payload_and_allows_close() {
+        let receiver = Arc::new(Mutex::new(
+            crate::receiver_task::ReceiverController::default(),
+        ));
+        let updater = ready_session();
+        receiver.lock().unwrap().reserve_install().unwrap();
+        let reservation = updater
+            .lock()
+            .unwrap()
+            .reserve(UpdateOperation::Install, true)
+            .unwrap();
+        let (update, bytes) = updater.lock().unwrap().take_ready(reservation).unwrap();
+        let poison_receiver = Arc::clone(&receiver);
+        assert!(std::thread::spawn(move || {
+            let _receiver = poison_receiver.lock().unwrap();
+            panic!("synthetic receiver state panic");
+        })
+        .join()
+        .is_err());
+
+        let snapshot = finish_returned_install_error(
+            &receiver,
+            &updater,
+            reservation,
+            update,
+            bytes,
+            "synthetic returned installer error".to_owned(),
+        )
+        .expect("poisoned error completion becomes conservative recovery");
+
+        assert_eq!(snapshot.phase, UpdatePhase::RestartRequired);
+        assert_eq!(snapshot.operation, None);
+        assert!(!updater.lock().unwrap().has_payload());
+        assert!(!receiver.is_poisoned());
+        assert!(receiver.lock().unwrap().ordinary_exit_requested());
+    }
+
+    #[test]
     fn later_discards_ready_payload_and_suppresses_automatic_rediscovery() {
         let mut session = UpdateSession::new("1.0.0".to_owned(), true);
         session.resource = Some(((), Some(vec![1, 2, 3])));
@@ -827,6 +1106,49 @@ mod tests {
 
         session.finish_failure(reservation, "offline".to_owned());
         assert_eq!(session.snapshot().error.as_deref(), Some("offline"));
+    }
+
+    #[test]
+    fn checks_do_not_replace_retained_available_or_ready_updates() {
+        let mut available = UpdateSession::new("1.0.0".to_owned(), false);
+        available.resource = Some(((), None));
+        available.snapshot.phase = UpdatePhase::Available;
+        let mut ready = UpdateSession::new("1.0.0".to_owned(), false);
+        ready.resource = Some(((), Some(vec![1])));
+        ready.snapshot.phase = UpdatePhase::Ready;
+
+        assert!(available.reserve(UpdateOperation::Check, true).is_err());
+        assert!(ready.reserve(UpdateOperation::Check, false).is_err());
+        assert_eq!(available.phase(), UpdatePhase::Available);
+        assert_eq!(ready.phase(), UpdatePhase::Ready);
+        assert!(ready.has_payload());
+    }
+
+    #[test]
+    fn restart_required_rejects_every_update_operation() {
+        for operation in [
+            UpdateOperation::Check,
+            UpdateOperation::Download,
+            UpdateOperation::Install,
+        ] {
+            let mut session = UpdateSession::new("1.0.0".to_owned(), true);
+            session.snapshot.phase = UpdatePhase::RestartRequired;
+            session.resource = Some(((), Some(vec![1])));
+
+            assert!(session.reserve(operation, true).is_err());
+            assert_eq!(session.phase(), UpdatePhase::RestartRequired);
+        }
+    }
+
+    #[test]
+    fn automatic_download_preference_changes_preserve_ready_recovery() {
+        let mut session = ready_session().into_inner().unwrap();
+
+        session.set_auto_download_enabled(false);
+
+        assert_eq!(session.phase(), UpdatePhase::Ready);
+        assert!(session.has_payload());
+        assert!(!session.snapshot().auto_download_enabled);
     }
 
     #[test]
