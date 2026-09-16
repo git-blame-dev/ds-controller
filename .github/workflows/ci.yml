@@ -222,10 +222,11 @@ jobs:
           rm -rf release-assets/final
           mkdir -p release-assets/final
           gh release download "$TAG" --dir release-assets/final
-          bash scripts/preflight-release.sh "$VERSION" "$TARGET_SHA" >/dev/null
+          bash scripts/preflight-release.sh --before-publish "$VERSION" "$TARGET_SHA" >/dev/null
           public_key=$(python3 -c 'import json; print(json.load(open("pc/app/src-tauri/tauri.conf.json"))["plugins"]["updater"]["pubkey"])')
           bash scripts/finalize-release.sh release-assets/final "$VERSION" "$TAG" "$TARGET_SHA" "$public_key"
           gh release upload "$TAG" release-assets/final/SHA256SUMS --clobber
+          bash scripts/preflight-release.sh --before-publish "$VERSION" "$TARGET_SHA" >/dev/null
           gh release edit "$TAG" --draft=false --prerelease=false --latest
           test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = "$TAG"
       - name: Verify already-published rerun without mutation

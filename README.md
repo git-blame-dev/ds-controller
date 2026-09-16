@@ -228,7 +228,7 @@ make app-dev
 
 Lean local workflow: `make test` validates the code; `make linux-verify` builds and inspects the Ubuntu package; `make pc` cross-builds the unsigned NSIS installer; and `make dist` stages all local distribution artifacts. Local builds do not create signed updater payloads.
 
-CI runs deterministic tests on pull requests and `main`. A successful `main` push builds the ROM once, then uses the pinned official Tauri action to build and sign the Debian and NSIS updater payloads sequentially, validate them, upload convenience ZIPs and checksums to a draft, and publish it automatically.
+CI runs deterministic tests on pull requests and `main`. A successful `main` push builds the ROM once, then uses the pinned official Tauri action to build and sign the Debian and NSIS updater payloads sequentially, validate them, upload convenience ZIPs and checksums to a draft, and publish it automatically. Release validation distinguishes absent tags from lookup failures, checks any existing tag's source, and rechecks the draft and current `main` immediately before publication. Already-published reruns verify their original assets and source without republishing, even after `main` or later releases advance.
 
 The DS host tests cover packet encoding, input mapping, and display wake policy. Hardware behavior such as Wi-Fi association, backlight control, WebView2 startup, ViGEmBus integration, Linux game detection, firewall prompts, and real controller output still requires manual platform and DS validation.
 

@@ -62,10 +62,27 @@ PY
 if [ "$is_draft" = true ]; then
   release_sha=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["targetCommitish"])' <<<"$release_json")
   [ "$release_sha" = "$target_sha" ] || { printf 'release source changed before promotion\n' >&2; exit 1; }
-  current_main=$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')
-  [ "$current_main" = "$target_sha" ] || { printf 'main advanced before promotion\n' >&2; exit 1; }
+  GITHUB_OUTPUT=/dev/null bash "$(dirname -- "$0")/preflight-release.sh" --before-publish "$version" "$target_sha" >/dev/null
 else
-  remote_sha=$(git ls-remote origin "refs/tags/$tag^{}" "refs/tags/$tag" | awk 'NR == 1 { value=$1 } /\^\{\}$/ { value=$1 } END { print value }')
+  if tag_output=$(git ls-remote --exit-code origin "refs/tags/$tag" "refs/tags/$tag^{}"); then
+    tag_status=0
+  else
+    tag_status=$?
+  fi
+  [ "$tag_status" -eq 0 ] || { printf 'could not look up published release tag\n' >&2; exit 1; }
+  remote_sha=$(TAG="$tag" python3 -c '
+import os, sys
+base = "refs/tags/" + os.environ["TAG"]
+values = {}
+for line in sys.stdin:
+    fields = line.rstrip("\n").split("\t")
+    if len(fields) != 2 or fields[1] not in (base, base + "^{}"):
+        raise SystemExit("invalid remote tag response")
+    values.setdefault(fields[1], set()).add(fields[0])
+if base not in values or any(len(items) != 1 for items in values.values()):
+    raise SystemExit("ambiguous remote tag response")
+print(next(iter(values.get(base + "^{}", values[base]))))
+' <<<"$tag_output") || { printf 'could not resolve published release tag\n' >&2; exit 1; }
   [ "$remote_sha" = "$target_sha" ] || { printf 'release tag moved after publication\n' >&2; exit 1; }
 fi
 
