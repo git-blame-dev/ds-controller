@@ -128,6 +128,89 @@ releases.extend([
 pathlib.Path(sys.argv[2]).write_text("".join(json.dumps(release) + "\n" for release in releases))
 PY
 
+selector_history="$fixture_root/selector-releases.json"
+cat > "$selector_history" <<'EOF'
+{"tag_name":"v2026.9.17-1","draft":false,"prerelease":false,"target_commitish":"older-source"}
+{"tag_name":"v2026.9.17-3","draft":false,"prerelease":false,"target_commitish":"other-source"}
+{"tag_name":"v2026.9.17-4","draft":true,"prerelease":false,"target_commitish":"draft-source"}
+EOF
+
+printf 'TEST release identity starts each UTC date at one\n'
+: > "$fixture_root/empty-releases.json"
+selected_version=$(PATH="$mock_bin:$PATH" RELEASE_HISTORY_JSON_FIXTURE="$fixture_root/empty-releases.json" \
+  bash "$repo_root/scripts/select-release-version.sh" synthetic/project new-source 2026.9.17)
+[ "$selected_version" = 2026.9.17-1 ]
+
+printf 'TEST release identity advances the highest reserved daily ordinal\n'
+selected_version=$(PATH="$mock_bin:$PATH" RELEASE_HISTORY_JSON_FIXTURE="$selector_history" \
+  bash "$repo_root/scripts/select-release-version.sh" synthetic/project new-source 2026.9.17)
+[ "$selected_version" = 2026.9.17-5 ]
+
+printf 'TEST release identity reuses a same-source draft across retry dates\n'
+cat >> "$selector_history" <<'EOF'
+{"tag_name":"v2026.9.16-2","draft":true,"prerelease":false,"target_commitish":"retry-source"}
+EOF
+selected_version=$(PATH="$mock_bin:$PATH" RELEASE_HISTORY_JSON_FIXTURE="$selector_history" \
+  bash "$repo_root/scripts/select-release-version.sh" synthetic/project retry-source 2026.9.18)
+[ "$selected_version" = 2026.9.16-2 ]
+
+printf 'TEST release identity fails closed on GitHub API failure\n'
+if PATH="$mock_bin:$PATH" RELEASE_HISTORY_JSON_FIXTURE="$selector_history" GH_API_FAILURE=true \
+  bash "$repo_root/scripts/select-release-version.sh" synthetic/project new-source 2026.9.17; then
+  printf 'release identity selection swallowed GitHub API failure\n' >&2
+  exit 1
+fi
+
+printf 'TEST release identity rejects malformed canonical release state\n'
+malformed_selector_history="$fixture_root/malformed-selector-releases.json"
+printf '%s\n' '{"tag_name":"v2026.9.17-1","draft":1,"prerelease":false,"target_commitish":"older-source"}' > "$malformed_selector_history"
+if PATH="$mock_bin:$PATH" RELEASE_HISTORY_JSON_FIXTURE="$malformed_selector_history" \
+  bash "$repo_root/scripts/select-release-version.sh" synthetic/project new-source 2026.9.17; then
+  printf 'release identity selection accepted malformed release state\n' >&2
+  exit 1
+fi
+
+printf 'TEST release identity rejects a same-source canonical prerelease\n'
+prerelease_selector_history="$fixture_root/prerelease-selector-releases.json"
+printf '%s\n' '{"tag_name":"v2026.9.17-1","draft":false,"prerelease":true,"target_commitish":"same-source"}' > "$prerelease_selector_history"
+if PATH="$mock_bin:$PATH" RELEASE_HISTORY_JSON_FIXTURE="$prerelease_selector_history" \
+  bash "$repo_root/scripts/select-release-version.sh" synthetic/project same-source 2026.9.17; then
+  printf 'release identity selection ignored a same-source canonical prerelease\n' >&2
+  exit 1
+fi
+
+printf 'TEST release identity counts prereleases in same-source ambiguity\n'
+cat >> "$prerelease_selector_history" <<'EOF'
+{"tag_name":"v2026.9.17-2","draft":true,"prerelease":false,"target_commitish":"same-source"}
+EOF
+if PATH="$mock_bin:$PATH" RELEASE_HISTORY_JSON_FIXTURE="$prerelease_selector_history" \
+  bash "$repo_root/scripts/select-release-version.sh" synthetic/project same-source 2026.9.17; then
+  printf 'release identity selection ignored a prerelease collision\n' >&2
+  exit 1
+fi
+
+printf 'TEST release identity rejects duplicate canonical tags\n'
+duplicate_selector_history="$fixture_root/duplicate-selector-releases.json"
+printf '%s\n%s\n' \
+  '{"tag_name":"v2026.9.17-1","draft":false,"prerelease":false,"target_commitish":"older-source"}' \
+  '{"tag_name":"v2026.9.17-1","draft":true,"prerelease":false,"target_commitish":"other-source"}' > "$duplicate_selector_history"
+if PATH="$mock_bin:$PATH" RELEASE_HISTORY_JSON_FIXTURE="$duplicate_selector_history" \
+  bash "$repo_root/scripts/select-release-version.sh" synthetic/project new-source 2026.9.17; then
+  printf 'release identity selection accepted a duplicate tag collision\n' >&2
+  exit 1
+fi
+
+printf 'TEST release identity rejects multiple releases for one source\n'
+same_source_selector_history="$fixture_root/same-source-selector-releases.json"
+printf '%s\n%s\n' \
+  '{"tag_name":"v2026.9.16-1","draft":false,"prerelease":false,"target_commitish":"same-source"}' \
+  '{"tag_name":"v2026.9.17-2","draft":true,"prerelease":false,"target_commitish":"same-source"}' > "$same_source_selector_history"
+if PATH="$mock_bin:$PATH" RELEASE_HISTORY_JSON_FIXTURE="$same_source_selector_history" \
+  bash "$repo_root/scripts/select-release-version.sh" synthetic/project same-source 2026.9.17; then
+  printf 'release identity selection accepted ambiguous same-source releases\n' >&2
+  exit 1
+fi
+
 run_preflight() {
   local version=$1
   shift
@@ -345,6 +428,16 @@ if PATH="$mock_bin:$PATH" GITHUB_REPOSITORY=synthetic/project VERIFY_ONLY=true M
 fi
 
 workflow="$repo_root/.github/workflows/ci.yml"
+printf 'TEST workflow selects release identity from complete release history\n'
+if ! grep -Fq 'version="$(scripts/select-release-version.sh "$GITHUB_REPOSITORY" "$TARGET_SHA")"' "$workflow"; then
+  printf 'workflow does not use the tested release identity selector\n' >&2
+  exit 1
+fi
+if grep -Fq '${GITHUB_RUN_NUMBER}' "$workflow"; then
+  printf 'workflow still uses the unrelated workflow run number as a release ordinal\n' >&2
+  exit 1
+fi
+
 promotion_commands=$(awk '
   /- name: Validate draft and promote automatically$/ { in_step=1; next }
   in_step && /^      - name:/ { exit }

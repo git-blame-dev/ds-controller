@@ -127,8 +127,7 @@ jobs:
           TARGET_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
-          version="$(date -u -d "$created_at" '+%Y.%-m.%-d')-${GITHUB_RUN_NUMBER}"
+          version="$(scripts/select-release-version.sh "$GITHUB_REPOSITORY" "$TARGET_SHA")"
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
           bash scripts/preflight-release.sh "$version" "$TARGET_SHA"
       - name: Generate release configuration
