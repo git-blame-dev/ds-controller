@@ -233,10 +233,18 @@ impl ReceiverController {
             );
             emit_log(app, LogLevel::Error, message);
         }
-        if self.lifecycle == LifecycleState::Stopping {
-            self.lifecycle = LifecycleState::Normal;
-        }
+        self.finish_stop_lifecycle(outcome);
         self.status()
+    }
+
+    fn finish_stop_lifecycle(&mut self, outcome: StopOutcome) {
+        if self.lifecycle == LifecycleState::Stopping {
+            self.lifecycle = if outcome.install_ready() {
+                LifecycleState::Normal
+            } else {
+                LifecycleState::RestartRequired
+            };
+        }
     }
 
     pub fn reserve_install(&mut self) -> Result<(), String> {
@@ -249,18 +257,6 @@ impl ReceiverController {
         Ok(())
     }
 
-    pub fn reserve_install_if_idle(&mut self) -> bool {
-        let safely_idle = self.lifecycle == LifecycleState::Normal
-            && self.stop_tx.is_none()
-            && self.join_handle.is_none()
-            && self.status() == RuntimeStatus::default();
-        if !safely_idle {
-            return false;
-        }
-        self.lifecycle = LifecycleState::InstallReserved;
-        true
-    }
-
     pub fn cancel_install_reservation(&mut self) {
         if self.lifecycle == LifecycleState::InstallReserved {
             self.lifecycle = LifecycleState::Normal;
@@ -268,7 +264,7 @@ impl ReceiverController {
     }
 
     pub fn finish_install_preparation_failure(&mut self, outcome: StopOutcome) {
-        self.lifecycle = if outcome.worker_terminated {
+        self.lifecycle = if outcome.install_ready() {
             LifecycleState::Normal
         } else {
             LifecycleState::RestartRequired
@@ -650,30 +646,6 @@ mod tests {
     }
 
     #[test]
-    fn automatic_install_reservation_requires_an_already_idle_receiver() {
-        let mut idle = ReceiverController::default();
-        assert!(idle.reserve_install_if_idle());
-        assert!(idle.install_reserved());
-
-        let mut active = ReceiverController::default();
-        let (stop_tx, _stop_rx) = mpsc::channel();
-        active.stop_tx = Some(stop_tx);
-        assert!(!active.reserve_install_if_idle());
-        assert!(!active.install_reserved());
-
-        let mut unsafe_state = ReceiverController::default();
-        *unsafe_state.status.lock().unwrap() = RuntimeStatus {
-            receiver: ReceiverStatus::Error("synthetic receiver failure".to_owned()),
-            virtual_controller: VirtualControllerStatus::Error(
-                "synthetic neutral-output failure".to_owned(),
-            ),
-            ..RuntimeStatus::default()
-        };
-        assert!(!unsafe_state.reserve_install_if_idle());
-        assert!(!unsafe_state.install_reserved());
-    }
-
-    #[test]
     fn accepted_exit_prevents_a_later_install_reservation() {
         let mut receiver = ReceiverController::default();
 
@@ -702,7 +674,7 @@ mod tests {
     }
 
     #[test]
-    fn failed_install_preparation_reopens_only_after_worker_termination() {
+    fn failed_install_preparation_requires_restart_without_confirmed_neutral() {
         let mut terminated = ReceiverController::default();
         terminated
             .reserve_install()
@@ -721,8 +693,24 @@ mod tests {
             neutral: false,
         });
 
-        assert!(terminated.reserve_install().is_ok());
+        assert!(terminated.reserve_install().is_err());
         assert!(unknown_termination.reserve_install().is_err());
+    }
+
+    #[test]
+    fn failed_receiver_stop_requires_restart_without_confirmed_neutral() {
+        let mut receiver = ReceiverController {
+            lifecycle: LifecycleState::Stopping,
+            ..ReceiverController::default()
+        };
+
+        receiver.finish_stop_lifecycle(StopOutcome {
+            worker_terminated: true,
+            neutral: false,
+        });
+
+        assert!(receiver.reserve_install().is_err());
+        assert!(receiver.ordinary_exit_requested());
     }
 
     #[test]

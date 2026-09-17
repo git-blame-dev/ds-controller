@@ -91,14 +91,12 @@ fn prepare_install<T>(
         let mut receiver = receiver
             .lock()
             .map_err(|_| CommandErrorDto::state_unavailable())?;
-        match mode {
-            InstallMode::Manual => {
-                receiver
-                    .reserve_install()
-                    .map_err(CommandErrorDto::updater_error)?;
-                true
+        match receiver.reserve_install() {
+            Ok(()) => true,
+            Err(error) if mode == InstallMode::Manual => {
+                return Err(CommandErrorDto::updater_error(error));
             }
-            InstallMode::Automatic => receiver.reserve_install_if_idle(),
+            Err(_) => false,
         }
     };
     if !receiver_reserved {
@@ -150,13 +148,7 @@ fn prepare_install<T>(
         (reservation, update, bytes)
     };
 
-    let outcome = match mode {
-        InstallMode::Manual => stop_worker(),
-        InstallMode::Automatic => StopOutcome {
-            worker_terminated: true,
-            neutral: true,
-        },
-    };
+    let outcome = stop_worker();
     if outcome.install_ready() {
         return Ok(InstallPreparation::Proceed {
             reservation,
@@ -175,12 +167,8 @@ fn prepare_install<T>(
             .map_err(|_| CommandErrorDto::state_unavailable())?;
         let message =
             "receiver worker termination and neutral output were not both confirmed".to_owned();
-        if outcome.worker_terminated {
-            session.restore_ready(reservation, update, bytes, message);
-        } else {
-            let _ = (update, bytes);
-            session.finish_restart_required(reservation, message);
-        }
+        let _ = (update, bytes);
+        session.finish_restart_required(reservation, message);
         session.snapshot()
     };
     publish(snapshot.clone());
@@ -1072,7 +1060,7 @@ mod tests {
     }
 
     #[test]
-    fn install_preparation_restores_update_and_lifecycle_after_neutral_failure() {
+    fn install_preparation_requires_restart_after_neutral_failure() {
         let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
         let updater = ready_session();
 
@@ -1086,10 +1074,10 @@ mod tests {
         .expect("known termination is handled");
 
         assert!(matches!(preparation, InstallPreparation::Blocked(_)));
-        assert!(receiver.lock().unwrap().reserve_install().is_ok());
+        assert!(receiver.lock().unwrap().reserve_install().is_err());
         let session = updater.lock().unwrap();
-        assert_eq!(session.phase(), UpdatePhase::Ready);
-        assert!(session.has_payload());
+        assert_eq!(session.phase(), UpdatePhase::RestartRequired);
+        assert!(!session.has_payload());
     }
 
     #[test]
@@ -1564,7 +1552,34 @@ mod tests {
     }
 
     #[test]
-    fn automatic_install_preparation_reserves_an_idle_receiver_without_stopping_it() {
+    fn automatic_install_preparation_confirms_receiver_shutdown() {
+        let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
+        let updater = ready_session();
+        let stop_called = std::cell::Cell::new(false);
+
+        let preparation = prepare_install(
+            &receiver,
+            &updater,
+            InstallMode::Automatic,
+            || {
+                stop_called.set(true);
+                StopOutcome {
+                    worker_terminated: true,
+                    neutral: true,
+                }
+            },
+            |_| {},
+        )
+        .expect("automatic installation can be prepared after receiver shutdown");
+
+        assert!(matches!(preparation, InstallPreparation::Proceed { .. }));
+        assert!(stop_called.get());
+        assert!(receiver.lock().unwrap().install_reserved());
+        assert_eq!(updater.lock().unwrap().phase(), UpdatePhase::Installing);
+    }
+
+    #[test]
+    fn automatic_install_preparation_requires_restart_when_neutralization_fails() {
         let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
         let updater = ready_session();
 
@@ -1572,18 +1587,40 @@ mod tests {
             &receiver,
             &updater,
             InstallMode::Automatic,
-            || panic!("already-idle receiver must not be stopped"),
+            || StopOutcome {
+                worker_terminated: true,
+                neutral: false,
+            },
             |_| {},
         )
-        .expect("idle automatic installation can be prepared");
+        .expect("failed neutralization returns a blocked update");
 
-        assert!(matches!(preparation, InstallPreparation::Proceed { .. }));
-        assert!(receiver.lock().unwrap().install_reserved());
-        assert_eq!(updater.lock().unwrap().phase(), UpdatePhase::Installing);
+        assert!(matches!(preparation, InstallPreparation::Blocked(_)));
+        assert_eq!(
+            updater.lock().unwrap().phase(),
+            UpdatePhase::RestartRequired
+        );
+        assert!(!updater.lock().unwrap().has_payload());
+        assert!(!receiver.lock().unwrap().install_reserved());
+
+        let retry = prepare_install(
+            &receiver,
+            &updater,
+            InstallMode::Automatic,
+            || panic!("restart-required retry must not assume an absent worker is neutral"),
+            |_| {},
+        )
+        .expect("automatic retry remains deferred until restart");
+
+        assert!(matches!(retry, InstallPreparation::Deferred(_)));
+        assert_eq!(
+            updater.lock().unwrap().phase(),
+            UpdatePhase::RestartRequired
+        );
     }
 
     #[test]
-    fn automatic_install_preparation_rechecks_the_preference_after_idle_reservation() {
+    fn automatic_install_preparation_rechecks_the_preference_after_lifecycle_reservation() {
         let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
         let updater = ready_session();
         updater.lock().unwrap().set_auto_install_enabled(false);

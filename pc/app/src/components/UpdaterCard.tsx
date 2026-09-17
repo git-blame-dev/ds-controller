@@ -60,7 +60,7 @@ export function UpdaterCard({ snapshot, onAction, onAutoDownload, onAutoInstall 
           <input
             role="switch"
             type="checkbox"
-            aria-label="Install downloaded updates automatically when the receiver is stopped"
+            aria-label="Install downloaded updates automatically after stopping the receiver safely"
             checked={snapshot.autoInstallEnabled}
             disabled={busy}
             onChange={(event) => onAutoInstall(event.target.checked)}
@@ -123,7 +123,7 @@ export function UpdaterCard({ snapshot, onAction, onAutoDownload, onAutoInstall 
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              Automatic installation runs only when the receiver is already stopped.
+              Automatic installation safely stops and neutralizes the receiver before starting the installer.
             </p>
             <p className="text-xs text-muted-foreground">
               Updates change only the desktop app. The Nintendo DS ROM and its configuration stay unchanged.
