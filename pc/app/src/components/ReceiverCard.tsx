@@ -47,17 +47,9 @@ const sender = receiver.kind === "running" ? receiver.lastSender ?? "Waiting for
 const virtualControllerTone = virtualControllerStatusTone(virtualController)
 
 return (
-<section className="rounded-2xl border border-white/10 bg-card/80 p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
-<div className="flex flex-wrap items-center justify-between gap-3">
-<h1 className="text-sm font-semibold text-white">Receiver</h1>
-<div className="flex flex-wrap items-center gap-2">
-<StatusBadge label={receiverStatusLabel(receiver)} tone={receiverStatusTone(receiver)} />
-<StatusBadge label={`Virtual controller ${virtualControllerLabel(virtualController)}`} tone={virtualControllerTone} />
-</div>
-</div>
-
-<div className="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_auto] lg:items-end">
-<label className="space-y-2">
+<section aria-label="Receiver" className="rounded-2xl border border-white/10 bg-card/80 p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
+<div className="flex flex-wrap items-end gap-3">
+<label className="min-w-40 flex-1 space-y-2">
 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Port</span>
 <input
 className="h-11 w-full rounded-xl border border-input bg-black/20 px-4 text-sm text-white outline-none ring-cyan-300/0 transition focus:border-cyan-300/70 focus:ring-4 focus:ring-cyan-300/10"
@@ -67,6 +59,10 @@ onChange={(event: ChangeEvent<HTMLInputElement>) => onPortChange(event.target.va
 aria-invalid={!portValidation.ok}
 />
 </label>
+<div className="flex min-h-11 flex-wrap items-center gap-2">
+<StatusBadge label={receiverStatusLabel(receiver)} tone={receiverStatusTone(receiver)} />
+<StatusBadge label={`Virtual controller ${virtualControllerLabel(virtualController)}`} tone={virtualControllerTone} />
+</div>
 <button
 className="h-11 rounded-xl bg-cyan-300 px-5 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
 type="button"
