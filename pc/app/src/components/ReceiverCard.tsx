@@ -48,11 +48,11 @@ const virtualControllerTone = virtualControllerStatusTone(virtualController)
 
 return (
 <section aria-label="Receiver" className="rounded-2xl border border-white/10 bg-card/80 p-5 shadow-2xl shadow-black/25 backdrop-blur-xl">
-<div className="flex flex-wrap items-end gap-3">
-<label className="min-w-40 flex-1 space-y-2">
+<div className="flex flex-wrap items-center gap-3">
+<label className="flex h-11 min-w-40 flex-1 items-center gap-3 rounded-xl border border-input bg-black/20 px-4 ring-cyan-300/0 transition focus-within:border-cyan-300/70 focus-within:ring-4 focus-within:ring-cyan-300/10">
 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Port</span>
 <input
-className="h-11 w-full rounded-xl border border-input bg-black/20 px-4 text-sm text-white outline-none ring-cyan-300/0 transition focus:border-cyan-300/70 focus:ring-4 focus:ring-cyan-300/10"
+className="min-w-0 flex-1 bg-transparent text-sm tabular-nums text-white outline-none"
 inputMode="numeric"
 value={portValue}
 onChange={(event: ChangeEvent<HTMLInputElement>) => onPortChange(event.target.value)}
@@ -87,16 +87,17 @@ Apply & Restart
 <MetricItem label="Last packet" value={formatTimestamp(lastPacketAt)} />
 <MetricItem label="Packets" value={packetCount} />
 </dl>
-<div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
-<p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Pressed buttons</p>
+<div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+<p className="shrink-0 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Pressed buttons</p>
+<div className="min-w-36 flex-1">
 <ButtonBadges buttons={pressedButtons} />
 </div>
-{virtualController.kind === "error" ? <p className="mt-3 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{virtualController.message}</p> : null}
-
-<div className="mt-4 grid gap-3 md:grid-cols-2">
-<SwitchRow label="Start receiver when app opens" checked={draftSettings.startReceiverWhenAppOpens} onChange={(value) => onToggle("startReceiverWhenAppOpens", value)} />
-<SwitchRow label="Show packet stream in logs" checked={draftSettings.packetLoggingEnabled} onChange={(value) => onToggle("packetLoggingEnabled", value)} />
+<div className="ml-auto flex flex-wrap items-center gap-2">
+<SwitchRow label="Auto-start receiver" checked={draftSettings.startReceiverWhenAppOpens} onChange={(value) => onToggle("startReceiverWhenAppOpens", value)} />
+<SwitchRow label="Packet stream in logs" checked={draftSettings.packetLoggingEnabled} onChange={(value) => onToggle("packetLoggingEnabled", value)} />
 </div>
+</div>
+{virtualController.kind === "error" ? <p className="mt-3 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-200">{virtualController.message}</p> : null}
 </section>
 )
 }
@@ -138,7 +139,7 @@ type="button"
 role="switch"
 aria-checked={checked}
 onClick={() => onChange(!checked)}
-className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left text-sm text-slate-200 transition hover:bg-white/[0.06]"
+className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-left text-sm text-slate-200 transition hover:bg-white/[0.06]"
 >
 <span>{label}</span>
 <span className={`flex h-6 w-11 items-center rounded-full p-1 transition ${checked ? "bg-cyan-300" : "bg-slate-700"}`}>
