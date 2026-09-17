@@ -30,7 +30,8 @@ export function isAppSettings(value: unknown): value is AppSettings {
     isValidPort(value.port) &&
     typeof value.startReceiverWhenAppOpens === "boolean" &&
     typeof value.packetLoggingEnabled === "boolean" &&
-    typeof value.autoDownloadUpdates === "boolean"
+    typeof value.autoDownloadUpdates === "boolean" &&
+    typeof value.autoInstallUpdates === "boolean"
   )
 }
 
@@ -46,7 +47,8 @@ export function isUpdateSnapshot(value: unknown): value is UpdateSnapshot {
     typeof value.downloadedBytes !== "number" ||
     !(value.totalBytes === null || typeof value.totalBytes === "number") ||
     !(value.error === null || typeof value.error === "string") ||
-    typeof value.autoDownloadEnabled !== "boolean"
+    typeof value.autoDownloadEnabled !== "boolean" ||
+    typeof value.autoInstallEnabled !== "boolean"
   ) return false
   return ["idle", "current", "unavailable", "available", "downloading", "ready", "installing", "restartRequired"].includes(value.phase) &&
     (value.operation === null || (typeof value.operation === "string" && ["check", "download", "install"].includes(value.operation))) &&

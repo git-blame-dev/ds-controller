@@ -45,6 +45,9 @@ export async function installUpdate() { return updateCommand("install_update") }
 export async function setAutoDownloadUpdates(enabled: boolean) {
   return updateCommand("set_auto_download_updates", { enabled })
 }
+export async function setAutoInstallUpdates(enabled: boolean) {
+  return updateCommand("set_auto_install_updates", { enabled })
+}
 async function updateCommand(command: string, args?: Record<string, unknown>): Promise<UpdateSnapshot> {
   return validateCommandPayload(await invoke<unknown>(command, args), isUpdateSnapshot, command)
 }

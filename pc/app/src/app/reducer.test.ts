@@ -4,8 +4,9 @@ import { appReducer, createInitialAppState } from "./reducer"
 import type { LogEntry } from "./types"
 
 describe("appReducer", () => {
-  test("initial settings mirror the backend automatic-download default", () => {
+  test("initial settings mirror the backend automatic-update defaults", () => {
     expect(createInitialAppState().settings.autoDownloadUpdates).toBe(true)
+    expect(createInitialAppState().settings.autoInstallUpdates).toBe(true)
   })
 
   test("keeps only the newest 1000 log entries", () => {

@@ -23,7 +23,7 @@ describe("validatePortInput", () => {
 })
 
 describe("isUpdateSnapshot", () => {
-  const snapshot = { revision: 1, phase: "downloading", operation: "download", currentVersion: "1.0.0", availableVersion: "1.1.0", notes: null, downloadedBytes: 10, totalBytes: null, error: null, autoDownloadEnabled: true }
+  const snapshot = { revision: 1, phase: "downloading", operation: "download", currentVersion: "1.0.0", availableVersion: "1.1.0", notes: null, downloadedBytes: 10, totalBytes: null, error: null, autoDownloadEnabled: true, autoInstallEnabled: true }
   test("accepts unknown download totals", () => expect(isUpdateSnapshot(snapshot)).toBe(true))
   test("accepts verified current update status", () => expect(isUpdateSnapshot({ ...snapshot, phase: "current", operation: null, availableVersion: null })).toBe(true))
   test("accepts unavailable update metadata", () => expect(isUpdateSnapshot({ ...snapshot, phase: "unavailable", operation: null })).toBe(true))
@@ -32,6 +32,11 @@ describe("isUpdateSnapshot", () => {
     const withoutRevision = { ...snapshot }
     Reflect.deleteProperty(withoutRevision, "revision")
     expect(isUpdateSnapshot(withoutRevision)).toBe(false)
+  })
+  test("rejects snapshots without the automatic-install preference", () => {
+    const withoutAutoInstall = { ...snapshot }
+    Reflect.deleteProperty(withoutAutoInstall, "autoInstallEnabled")
+    expect(isUpdateSnapshot(withoutAutoInstall)).toBe(false)
   })
 })
 

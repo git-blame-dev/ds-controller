@@ -11,6 +11,7 @@ export const INITIAL_UPDATE_SNAPSHOT: UpdateSnapshot = Object.freeze({
   totalBytes: null,
   error: null,
   autoDownloadEnabled: true,
+  autoInstallEnabled: true,
 })
 
 interface UpdaterSubscriptionDependencies {

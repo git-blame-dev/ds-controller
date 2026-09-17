@@ -15,8 +15,10 @@ pub struct AppSettings {
     pub port: u16,
     pub start_receiver_when_app_opens: bool,
     pub packet_logging_enabled: bool,
-    #[serde(default = "default_auto_download_updates")]
+    #[serde(default = "default_auto_update_preference")]
     pub auto_download_updates: bool,
+    #[serde(default = "default_auto_update_preference")]
+    pub auto_install_updates: bool,
     pub timeout_ms: u64,
 }
 
@@ -70,12 +72,13 @@ impl Default for AppSettings {
             start_receiver_when_app_opens: true,
             packet_logging_enabled: false,
             auto_download_updates: true,
+            auto_install_updates: true,
             timeout_ms: DEFAULT_TIMEOUT_MS,
         }
     }
 }
 
-const fn default_auto_download_updates() -> bool {
+const fn default_auto_update_preference() -> bool {
     true
 }
 
@@ -135,6 +138,7 @@ mod tests {
         assert!(settings.start_receiver_when_app_opens);
         assert!(!settings.packet_logging_enabled);
         assert!(settings.auto_download_updates);
+        assert!(settings.auto_install_updates);
         assert_eq!(DEFAULT_TIMEOUT_MS, 75);
         assert_eq!(settings.timeout_ms, DEFAULT_TIMEOUT_MS);
     }
@@ -152,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_and_legacy_valid_settings_enable_automatic_update_downloads() {
+    fn fresh_and_legacy_valid_settings_enable_automatic_updates() {
         let fresh = AppSettings::default();
         let legacy = serde_json::from_value::<AppSettings>(serde_json::json!({
             "port": DEFAULT_PORT,
@@ -163,7 +167,9 @@ mod tests {
         .expect("valid legacy settings should migrate");
 
         assert!(fresh.auto_download_updates);
+        assert!(fresh.auto_install_updates);
         assert!(legacy.auto_download_updates);
+        assert!(legacy.auto_install_updates);
     }
 
     #[test]

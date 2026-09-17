@@ -168,6 +168,7 @@ else if (action === "retry") void updater.retry()
 else void updater.command(action)
 }}
 onAutoDownload={(enabled) => void updater.setAutoDownload(enabled)}
+onAutoInstall={(enabled) => void updater.setAutoInstall(enabled)}
 />
 <LogPanel logs={state.logs} />
 </div>

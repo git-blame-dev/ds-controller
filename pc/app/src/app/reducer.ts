@@ -6,6 +6,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = Object.freeze({
   startReceiverWhenAppOpens: true,
   packetLoggingEnabled: false,
   autoDownloadUpdates: true,
+  autoInstallUpdates: true,
 })
 const DEFAULT_RUNTIME_STATUS: RuntimeStatus = Object.freeze({
   receiver: Object.freeze({ kind: "idle" }),
@@ -81,6 +82,7 @@ function settingsEqual(left: AppSettings, right: AppSettings): boolean {
     left.port === right.port &&
     left.startReceiverWhenAppOpens === right.startReceiverWhenAppOpens &&
     left.packetLoggingEnabled === right.packetLoggingEnabled &&
-    left.autoDownloadUpdates === right.autoDownloadUpdates
+    left.autoDownloadUpdates === right.autoDownloadUpdates &&
+    left.autoInstallUpdates === right.autoInstallUpdates
   )
 }

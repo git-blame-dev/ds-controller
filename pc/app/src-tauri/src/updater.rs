@@ -35,6 +35,12 @@ pub enum UpdateOperation {
     Install,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InstallMode {
+    Manual,
+    Automatic,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateSnapshot {
@@ -48,6 +54,7 @@ pub struct UpdateSnapshot {
     pub total_bytes: Option<u64>,
     pub error: Option<String>,
     pub auto_download_enabled: bool,
+    pub auto_install_enabled: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,19 +77,37 @@ enum InstallPreparation<T> {
         bytes: Vec<u8>,
     },
     Blocked(UpdateSnapshot),
+    Deferred(UpdateSnapshot),
 }
 
 fn prepare_install<T>(
     receiver: &Mutex<ReceiverController>,
     updater: &Mutex<UpdateSession<T>>,
+    mode: InstallMode,
     stop_worker: impl FnOnce() -> StopOutcome,
     mut publish: impl FnMut(UpdateSnapshot),
 ) -> Result<InstallPreparation<T>, CommandErrorDto> {
-    receiver
-        .lock()
-        .map_err(|_| CommandErrorDto::state_unavailable())?
-        .reserve_install()
-        .map_err(CommandErrorDto::updater_error)?;
+    let receiver_reserved = {
+        let mut receiver = receiver
+            .lock()
+            .map_err(|_| CommandErrorDto::state_unavailable())?;
+        match mode {
+            InstallMode::Manual => {
+                receiver
+                    .reserve_install()
+                    .map_err(CommandErrorDto::updater_error)?;
+                true
+            }
+            InstallMode::Automatic => receiver.reserve_install_if_idle(),
+        }
+    };
+    if !receiver_reserved {
+        let snapshot = updater
+            .lock()
+            .map_err(|_| CommandErrorDto::state_unavailable())?
+            .snapshot();
+        return Ok(InstallPreparation::Deferred(snapshot));
+    }
 
     let (reservation, update, bytes) = {
         let mut session = match updater.lock() {
@@ -94,6 +119,14 @@ fn prepare_install<T>(
                 return Err(CommandErrorDto::state_unavailable());
             }
         };
+        if mode == InstallMode::Automatic && !session.should_install_automatically() {
+            let snapshot = session.snapshot();
+            drop(session);
+            if let Ok(mut receiver) = receiver.lock() {
+                receiver.cancel_install_reservation();
+            }
+            return Ok(InstallPreparation::Deferred(snapshot));
+        }
         let reservation = match session.reserve(UpdateOperation::Install, true) {
             Ok(reservation) => reservation,
             Err(error) => {
@@ -117,7 +150,13 @@ fn prepare_install<T>(
         (reservation, update, bytes)
     };
 
-    let outcome = stop_worker();
+    let outcome = match mode {
+        InstallMode::Manual => stop_worker(),
+        InstallMode::Automatic => StopOutcome {
+            worker_terminated: true,
+            neutral: true,
+        },
+    };
     if outcome.install_ready() {
         return Ok(InstallPreparation::Proceed {
             reservation,
@@ -173,7 +212,11 @@ pub struct UpdateSession<T> {
 }
 
 impl<T> UpdateSession<T> {
-    pub fn new(current_version: String, auto_download_enabled: bool) -> Self {
+    pub fn new(
+        current_version: String,
+        auto_download_enabled: bool,
+        auto_install_enabled: bool,
+    ) -> Self {
         Self {
             snapshot: UpdateSnapshot {
                 revision: 0,
@@ -186,6 +229,7 @@ impl<T> UpdateSession<T> {
                 total_bytes: None,
                 error: None,
                 auto_download_enabled,
+                auto_install_enabled,
             },
             resource: None,
             automatic_checks_suppressed: false,
@@ -287,14 +331,15 @@ impl<T> UpdateSession<T> {
         true
     }
 
-    pub fn finish_download(&mut self, reservation: OperationReservation, bytes: Vec<u8>) {
+    pub fn finish_download(&mut self, reservation: OperationReservation, bytes: Vec<u8>) -> bool {
         if !self.finish_operation(reservation) {
-            return;
+            return false;
         }
         if let Some((update, _)) = self.resource.take() {
             self.resource = Some((update, Some(bytes)));
             self.snapshot.phase = UpdatePhase::Ready;
         }
+        self.should_install_automatically()
     }
 
     pub fn finish_failure(&mut self, reservation: OperationReservation, message: String) {
@@ -381,6 +426,19 @@ impl<T> UpdateSession<T> {
     pub fn set_auto_download_enabled(&mut self, enabled: bool) {
         self.snapshot.auto_download_enabled = enabled;
         self.bump_revision();
+    }
+
+    pub fn set_auto_install_enabled(&mut self, enabled: bool) -> bool {
+        self.snapshot.auto_install_enabled = enabled;
+        self.bump_revision();
+        self.should_install_automatically()
+    }
+
+    fn should_install_automatically(&self) -> bool {
+        self.snapshot.auto_install_enabled
+            && self.snapshot.phase == UpdatePhase::Ready
+            && self.snapshot.operation.is_none()
+            && matches!(self.resource, Some((_, Some(_))))
     }
 
     fn finish_operation(&mut self, reservation: OperationReservation) -> bool {
@@ -512,6 +570,13 @@ pub async fn download_update(app: AppHandle) -> Result<UpdateSnapshot, CommandEr
 
 #[tauri::command]
 pub async fn install_update(app: AppHandle) -> Result<UpdateSnapshot, CommandErrorDto> {
+    perform_install(app, InstallMode::Manual).await
+}
+
+async fn perform_install(
+    app: AppHandle,
+    mode: InstallMode,
+) -> Result<UpdateSnapshot, CommandErrorDto> {
     ensure_bundle_eligible()?;
     let receiver = app.state::<AppState>().receiver().clone();
     let updater_state = app.state::<AppState>().updater().clone();
@@ -524,6 +589,7 @@ pub async fn install_update(app: AppHandle) -> Result<UpdateSnapshot, CommandErr
         prepare_install(
             &preparation_receiver,
             &preparation_updater,
+            mode,
             || {
                 let stop_task = stop_receiver
                     .lock()
@@ -568,6 +634,7 @@ pub async fn install_update(app: AppHandle) -> Result<UpdateSnapshot, CommandErr
             bytes,
         } => (reservation, update, bytes),
         InstallPreparation::Blocked(snapshot) => return Ok(snapshot),
+        InstallPreparation::Deferred(snapshot) => return Ok(snapshot),
     };
 
     let install_task = tauri::async_runtime::spawn_blocking(move || {
@@ -668,6 +735,131 @@ pub fn set_auto_download_updates(
     Ok(snapshot)
 }
 
+enum AutoInstallPreferenceUpdate {
+    Saved {
+        snapshot: UpdateSnapshot,
+        should_install: bool,
+    },
+    Reverted {
+        error: CommandErrorDto,
+        snapshot: UpdateSnapshot,
+        should_install: bool,
+    },
+}
+
+fn set_auto_install_preference<T>(
+    operation: &Mutex<()>,
+    settings: &Mutex<crate::settings::AppSettings>,
+    updater: &Mutex<UpdateSession<T>>,
+    enabled: bool,
+    persist: impl FnOnce(&crate::settings::AppSettings) -> Result<(), CommandErrorDto>,
+) -> Result<AutoInstallPreferenceUpdate, CommandErrorDto> {
+    let _operation = operation
+        .lock()
+        .map_err(|_| CommandErrorDto::state_unavailable())?;
+
+    if enabled {
+        let mut settings = settings
+            .lock()
+            .map_err(|_| CommandErrorDto::state_unavailable())?;
+        let mut next = settings.clone();
+        next.auto_install_updates = true;
+        persist(&next)?;
+        *settings = next;
+        drop(settings);
+
+        let mut session = updater
+            .lock()
+            .map_err(|_| CommandErrorDto::state_unavailable())?;
+        let should_install = session.set_auto_install_enabled(true);
+        return Ok(AutoInstallPreferenceUpdate::Saved {
+            snapshot: session.snapshot(),
+            should_install,
+        });
+    }
+
+    let previous = {
+        let mut session = updater
+            .lock()
+            .map_err(|_| CommandErrorDto::state_unavailable())?;
+        let previous = session.snapshot().auto_install_enabled;
+        session.set_auto_install_enabled(false);
+        previous
+    };
+    let persisted = (|| {
+        let mut settings = settings
+            .lock()
+            .map_err(|_| CommandErrorDto::state_unavailable())?;
+        let mut next = settings.clone();
+        next.auto_install_updates = false;
+        persist(&next)?;
+        *settings = next;
+        Ok(())
+    })();
+    if let Err(error) = persisted {
+        let mut session = updater
+            .lock()
+            .map_err(|_| CommandErrorDto::state_unavailable())?;
+        let should_install = session.set_auto_install_enabled(previous);
+        return Ok(AutoInstallPreferenceUpdate::Reverted {
+            error,
+            snapshot: session.snapshot(),
+            should_install,
+        });
+    }
+
+    let session = updater
+        .lock()
+        .map_err(|_| CommandErrorDto::state_unavailable())?;
+    Ok(AutoInstallPreferenceUpdate::Saved {
+        snapshot: session.snapshot(),
+        should_install: false,
+    })
+}
+
+#[tauri::command]
+pub async fn set_auto_install_updates(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<UpdateSnapshot, CommandErrorDto> {
+    let state = app.state::<AppState>();
+    let config_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| CommandErrorDto::invalid_settings(error.to_string()))?;
+    let outcome = set_auto_install_preference(
+        state.auto_install_preference(),
+        state.settings(),
+        state.updater(),
+        enabled,
+        |next| {
+            crate::settings::save_settings(&config_dir, next)
+                .map_err(|error| CommandErrorDto::invalid_settings(error.to_string()))
+        },
+    )?;
+    let (snapshot, should_install, persistence_error) = match outcome {
+        AutoInstallPreferenceUpdate::Saved {
+            snapshot,
+            should_install,
+        } => (snapshot, should_install, None),
+        AutoInstallPreferenceUpdate::Reverted {
+            error,
+            snapshot,
+            should_install,
+        } => (snapshot, should_install, Some(error)),
+    };
+    let _ = app.emit(SNAPSHOT_EVENT, snapshot.clone());
+    if should_install {
+        let install_result = perform_install(app, InstallMode::Automatic).await;
+        if let Some(error) = persistence_error {
+            let _ = install_result;
+            return Err(error);
+        }
+        return install_result;
+    }
+    persistence_error.map_or(Ok(snapshot), Err)
+}
+
 async fn perform_check(app: AppHandle, manual: bool) -> Result<UpdateSnapshot, CommandErrorDto> {
     ensure_bundle_eligible()?;
     let updater_state = app.state::<AppState>().updater().clone();
@@ -747,18 +939,25 @@ async fn perform_download(app: AppHandle) -> Result<UpdateSnapshot, CommandError
         )
         .await;
 
-    let snapshot = {
+    let (snapshot, should_install) = {
         let mut session = updater_state
             .lock()
             .map_err(|_| CommandErrorDto::state_unavailable())?;
-        match downloaded {
+        let should_install = match downloaded {
             Ok(bytes) => session.finish_download(reservation, bytes),
-            Err(error) => session.finish_failure(reservation, error.to_string()),
-        }
-        session.snapshot()
+            Err(error) => {
+                session.finish_failure(reservation, error.to_string());
+                false
+            }
+        };
+        (session.snapshot(), should_install)
     };
     let _ = app.emit(SNAPSHOT_EVENT, snapshot.clone());
-    Ok(snapshot)
+    if should_install {
+        perform_install(app, InstallMode::Automatic).await
+    } else {
+        Ok(snapshot)
+    }
 }
 
 fn updater_builder(app: &AppHandle) -> tauri_plugin_updater::UpdaterBuilder {
@@ -818,7 +1017,7 @@ mod tests {
     }
 
     fn ready_session() -> Mutex<UpdateSession<()>> {
-        let mut session = UpdateSession::new("1.0.0".to_owned(), true);
+        let mut session = UpdateSession::new("1.0.0".to_owned(), true, true);
         session.resource = Some(((), Some(vec![1, 2, 3])));
         session.snapshot.phase = UpdatePhase::Ready;
         Mutex::new(session)
@@ -826,7 +1025,7 @@ mod tests {
 
     #[test]
     fn missing_release_metadata_is_unavailable_instead_of_an_update_error() {
-        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), true);
+        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), true, true);
         let reservation = session
             .reserve(UpdateOperation::Check, false)
             .expect("check reserves the session");
@@ -839,7 +1038,7 @@ mod tests {
 
     #[test]
     fn automatic_startup_check_is_allowed_when_auto_download_is_disabled() {
-        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), false);
+        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), false, true);
 
         let reservation = session
             .reserve(UpdateOperation::Check, false)
@@ -858,6 +1057,7 @@ mod tests {
         let preparation = prepare_install(
             &receiver,
             &updater,
+            InstallMode::Manual,
             || {
                 assert!(receiver.lock().unwrap().install_reserved());
                 stop_outcome(true, true)
@@ -876,9 +1076,14 @@ mod tests {
         let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
         let updater = ready_session();
 
-        let preparation =
-            prepare_install(&receiver, &updater, || stop_outcome(true, false), |_| {})
-                .expect("known termination is handled");
+        let preparation = prepare_install(
+            &receiver,
+            &updater,
+            InstallMode::Manual,
+            || stop_outcome(true, false),
+            |_| {},
+        )
+        .expect("known termination is handled");
 
         assert!(matches!(preparation, InstallPreparation::Blocked(_)));
         assert!(receiver.lock().unwrap().reserve_install().is_ok());
@@ -892,9 +1097,14 @@ mod tests {
         let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
         let updater = ready_session();
 
-        let preparation =
-            prepare_install(&receiver, &updater, || stop_outcome(false, false), |_| {})
-                .expect("unknown termination is handled");
+        let preparation = prepare_install(
+            &receiver,
+            &updater,
+            InstallMode::Manual,
+            || stop_outcome(false, false),
+            |_| {},
+        )
+        .expect("unknown termination is handled");
 
         assert!(matches!(preparation, InstallPreparation::Blocked(_)));
         assert!(receiver.lock().unwrap().reserve_install().is_err());
@@ -917,6 +1127,7 @@ mod tests {
                 prepare_install(
                     &task_receiver,
                     &task_updater,
+                    InstallMode::Manual,
                     || panic!("synthetic stop callback panic"),
                     |_| {},
                 )
@@ -954,6 +1165,7 @@ mod tests {
                 prepare_install(
                     &task_receiver,
                     &task_updater,
+                    InstallMode::Manual,
                     || {
                         let _receiver = panic_receiver.lock().unwrap();
                         panic!("synthetic panic while receiver is locked");
@@ -991,6 +1203,7 @@ mod tests {
                 prepare_install(
                     &task_receiver,
                     &task_updater,
+                    InstallMode::Manual,
                     || stop_outcome(true, true),
                     |_| panic!("synthetic publish panic while updater is locked"),
                 )
@@ -1082,7 +1295,7 @@ mod tests {
 
     #[test]
     fn later_discards_ready_payload_and_suppresses_automatic_rediscovery() {
-        let mut session = UpdateSession::new("1.0.0".to_owned(), true);
+        let mut session = UpdateSession::new("1.0.0".to_owned(), true, true);
         session.resource = Some(((), Some(vec![1, 2, 3])));
         session.snapshot.phase = UpdatePhase::Ready;
 
@@ -1095,7 +1308,7 @@ mod tests {
 
     #[test]
     fn successful_check_without_an_update_marks_the_version_current() {
-        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), true);
+        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), true, true);
         let reservation = session
             .reserve(UpdateOperation::Check, true)
             .expect("check reserves the session");
@@ -1107,7 +1320,7 @@ mod tests {
 
     #[test]
     fn busy_operation_rejects_another_operation_without_queueing() {
-        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), true);
+        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), true, true);
         let reservation = session
             .reserve(UpdateOperation::Check, false)
             .expect("first operation reserves");
@@ -1123,10 +1336,10 @@ mod tests {
 
     #[test]
     fn checks_do_not_replace_retained_available_or_ready_updates() {
-        let mut available = UpdateSession::new("1.0.0".to_owned(), false);
+        let mut available = UpdateSession::new("1.0.0".to_owned(), false, true);
         available.resource = Some(((), None));
         available.snapshot.phase = UpdatePhase::Available;
-        let mut ready = UpdateSession::new("1.0.0".to_owned(), false);
+        let mut ready = UpdateSession::new("1.0.0".to_owned(), false, true);
         ready.resource = Some(((), Some(vec![1])));
         ready.snapshot.phase = UpdatePhase::Ready;
 
@@ -1144,7 +1357,7 @@ mod tests {
             UpdateOperation::Download,
             UpdateOperation::Install,
         ] {
-            let mut session = UpdateSession::new("1.0.0".to_owned(), true);
+            let mut session = UpdateSession::new("1.0.0".to_owned(), true, true);
             session.snapshot.phase = UpdatePhase::RestartRequired;
             session.resource = Some(((), Some(vec![1])));
 
@@ -1165,8 +1378,234 @@ mod tests {
     }
 
     #[test]
+    fn automatic_install_preference_changes_preserve_ready_recovery() {
+        let mut session = ready_session().into_inner().unwrap();
+
+        let should_install = session.set_auto_install_enabled(false);
+
+        assert!(!should_install);
+        assert_eq!(session.phase(), UpdatePhase::Ready);
+        assert!(session.has_payload());
+        assert!(!session.snapshot().auto_install_enabled);
+    }
+
+    #[test]
+    fn disabling_automatic_install_takes_effect_before_persistence() {
+        let operation = Mutex::new(());
+        let settings = Mutex::new(crate::settings::AppSettings::default());
+        let updater = ready_session();
+
+        let outcome = set_auto_install_preference(&operation, &settings, &updater, false, |_| {
+            assert!(!updater.lock().unwrap().snapshot().auto_install_enabled);
+            Ok(())
+        })
+        .expect("preference disable persists");
+        let AutoInstallPreferenceUpdate::Saved {
+            snapshot,
+            should_install,
+        } = outcome
+        else {
+            panic!("successful persistence must return a saved outcome");
+        };
+
+        assert!(!should_install);
+        assert!(!snapshot.auto_install_enabled);
+        assert!(!settings.lock().unwrap().auto_install_updates);
+        assert!(updater.lock().unwrap().has_payload());
+    }
+
+    #[test]
+    fn failed_automatic_install_disable_restores_the_prior_runtime_value() {
+        let operation = Mutex::new(());
+        let settings = Mutex::new(crate::settings::AppSettings::default());
+        let updater = ready_session();
+
+        let outcome = set_auto_install_preference(&operation, &settings, &updater, false, |_| {
+            Err(CommandErrorDto::invalid_settings("synthetic save failure"))
+        })
+        .expect("save failure returns a publishable rollback");
+
+        assert!(matches!(
+            outcome,
+            AutoInstallPreferenceUpdate::Reverted {
+                should_install: true,
+                ..
+            }
+        ));
+        assert!(settings.lock().unwrap().auto_install_updates);
+        assert!(updater.lock().unwrap().snapshot().auto_install_enabled);
+        assert!(updater.lock().unwrap().has_payload());
+    }
+
+    #[test]
+    fn failed_disable_requests_install_when_download_becomes_ready_during_persistence() {
+        let operation = Mutex::new(());
+        let settings = Mutex::new(crate::settings::AppSettings::default());
+        let mut session = UpdateSession::new("1.0.0".to_owned(), true, true);
+        session.resource = Some(((), None));
+        session.snapshot.phase = UpdatePhase::Available;
+        let reservation = session
+            .reserve(UpdateOperation::Download, true)
+            .expect("synthetic update can download");
+        let updater = Mutex::new(session);
+
+        let outcome = set_auto_install_preference(&operation, &settings, &updater, false, |_| {
+            assert!(!updater
+                .lock()
+                .unwrap()
+                .finish_download(reservation, vec![1, 2, 3]));
+            Err(CommandErrorDto::invalid_settings("synthetic save failure"))
+        })
+        .expect("save failure returns a publishable rollback");
+
+        let AutoInstallPreferenceUpdate::Reverted {
+            snapshot,
+            should_install,
+            ..
+        } = outcome
+        else {
+            panic!("failed persistence must return a rollback outcome");
+        };
+        assert!(should_install);
+        assert!(snapshot.auto_install_enabled);
+        assert_eq!(snapshot.phase, UpdatePhase::Ready);
+        assert!(updater.lock().unwrap().has_payload());
+    }
+
+    #[test]
+    fn overlapping_automatic_install_toggles_are_serialized() {
+        use std::sync::mpsc;
+
+        let operation = Arc::new(Mutex::new(()));
+        let settings = Arc::new(Mutex::new(crate::settings::AppSettings::default()));
+        let updater = Arc::new(ready_session());
+        let (disable_entered_tx, disable_entered_rx) = mpsc::channel();
+        let (release_disable_tx, release_disable_rx) = mpsc::channel();
+        let (enable_started_tx, enable_started_rx) = mpsc::channel();
+        let (enable_entered_tx, enable_entered_rx) = mpsc::channel();
+
+        let disable_operation = Arc::clone(&operation);
+        let disable_settings = Arc::clone(&settings);
+        let disable_updater = Arc::clone(&updater);
+        let disable = std::thread::spawn(move || {
+            set_auto_install_preference(
+                &disable_operation,
+                &disable_settings,
+                &disable_updater,
+                false,
+                |_| {
+                    disable_entered_tx.send(()).unwrap();
+                    release_disable_rx.recv().unwrap();
+                    Ok(())
+                },
+            )
+        });
+        disable_entered_rx.recv().unwrap();
+
+        let enable_operation = Arc::clone(&operation);
+        let enable_settings = Arc::clone(&settings);
+        let enable_updater = Arc::clone(&updater);
+        let enable = std::thread::spawn(move || {
+            enable_started_tx.send(()).unwrap();
+            set_auto_install_preference(
+                &enable_operation,
+                &enable_settings,
+                &enable_updater,
+                true,
+                |_| {
+                    enable_entered_tx.send(()).unwrap();
+                    Ok(())
+                },
+            )
+        });
+
+        enable_started_rx.recv().unwrap();
+        assert!(enable_entered_rx
+            .recv_timeout(Duration::from_millis(50))
+            .is_err());
+        release_disable_tx.send(()).unwrap();
+        disable.join().unwrap().unwrap();
+        enable.join().unwrap().unwrap();
+
+        assert!(settings.lock().unwrap().auto_install_updates);
+        assert!(updater.lock().unwrap().snapshot().auto_install_enabled);
+    }
+
+    #[test]
+    fn enabling_automatic_install_while_ready_requests_a_guarded_attempt() {
+        let mut session = ready_session().into_inner().unwrap();
+        session.set_auto_install_enabled(false);
+
+        let should_install = session.set_auto_install_enabled(true);
+
+        assert!(should_install);
+        assert_eq!(session.phase(), UpdatePhase::Ready);
+        assert!(session.has_payload());
+    }
+
+    #[test]
+    fn automatic_install_preparation_defers_without_stopping_an_active_lifecycle() {
+        let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
+        receiver.lock().unwrap().reserve_install().unwrap();
+        let updater = ready_session();
+
+        let preparation = prepare_install(
+            &receiver,
+            &updater,
+            InstallMode::Automatic,
+            || panic!("automatic installation must not stop the receiver"),
+            |_| {},
+        )
+        .expect("expected automatic deferral is not an error");
+
+        assert!(matches!(preparation, InstallPreparation::Deferred(_)));
+        assert_eq!(updater.lock().unwrap().phase(), UpdatePhase::Ready);
+        assert!(updater.lock().unwrap().has_payload());
+    }
+
+    #[test]
+    fn automatic_install_preparation_reserves_an_idle_receiver_without_stopping_it() {
+        let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
+        let updater = ready_session();
+
+        let preparation = prepare_install(
+            &receiver,
+            &updater,
+            InstallMode::Automatic,
+            || panic!("already-idle receiver must not be stopped"),
+            |_| {},
+        )
+        .expect("idle automatic installation can be prepared");
+
+        assert!(matches!(preparation, InstallPreparation::Proceed { .. }));
+        assert!(receiver.lock().unwrap().install_reserved());
+        assert_eq!(updater.lock().unwrap().phase(), UpdatePhase::Installing);
+    }
+
+    #[test]
+    fn automatic_install_preparation_rechecks_the_preference_after_idle_reservation() {
+        let receiver = Mutex::new(crate::receiver_task::ReceiverController::default());
+        let updater = ready_session();
+        updater.lock().unwrap().set_auto_install_enabled(false);
+
+        let preparation = prepare_install(
+            &receiver,
+            &updater,
+            InstallMode::Automatic,
+            || panic!("disabled automatic installation must not stop the receiver"),
+            |_| {},
+        )
+        .expect("disabled automatic installation is deferred");
+
+        assert!(matches!(preparation, InstallPreparation::Deferred(_)));
+        assert!(!receiver.lock().unwrap().install_reserved());
+        assert_eq!(updater.lock().unwrap().phase(), UpdatePhase::Ready);
+        assert!(updater.lock().unwrap().has_payload());
+    }
+
+    #[test]
     fn ready_is_entered_only_after_verified_download_bytes_are_returned() {
-        let mut session = UpdateSession::new("1.0.0".to_owned(), true);
+        let mut session = UpdateSession::new("1.0.0".to_owned(), true, true);
         session.resource = Some(((), None));
         session.snapshot.phase = UpdatePhase::Available;
         let reservation = session
@@ -1177,14 +1616,14 @@ mod tests {
         assert_eq!(session.phase(), UpdatePhase::Downloading);
         assert!(!session.has_payload());
 
-        session.finish_download(reservation, vec![0; 8]);
+        assert!(session.finish_download(reservation, vec![0; 8]));
         assert_eq!(session.phase(), UpdatePhase::Ready);
         assert!(session.has_payload());
     }
 
     #[test]
     fn every_published_session_transition_advances_the_revision() {
-        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), true);
+        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), true, true);
         let initial_revision = session.snapshot().revision;
         let reservation = session
             .reserve(UpdateOperation::Check, true)

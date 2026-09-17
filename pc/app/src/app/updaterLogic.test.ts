@@ -14,6 +14,7 @@ const BASE_SNAPSHOT: UpdateSnapshot = {
   totalBytes: null,
   error: "synthetic network failure",
   autoDownloadEnabled: true,
+  autoInstallEnabled: true,
 }
 
 describe("retryOperation", () => {
@@ -30,6 +31,7 @@ describe("retryOperation", () => {
 
 test("initial updater state mirrors the backend automatic-download default", () => {
   expect(INITIAL_UPDATE_SNAPSHOT.autoDownloadEnabled).toBe(true)
+  expect(INITIAL_UPDATE_SNAPSHOT.autoInstallEnabled).toBe(true)
 })
 
 test("an idle snapshot with an error does not say the app is up to date", () => {

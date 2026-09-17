@@ -8,12 +8,13 @@ interface UpdaterCardProps {
   readonly snapshot: UpdateSnapshot
   readonly onAction: (action: UpdateAction) => void
   readonly onAutoDownload: (enabled: boolean) => void
+  readonly onAutoInstall: (enabled: boolean) => void
 }
 
 const buttonClass =
   "shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
 
-export function UpdaterCard({ snapshot, onAction, onAutoDownload }: UpdaterCardProps) {
+export function UpdaterCard({ snapshot, onAction, onAutoDownload, onAutoInstall }: UpdaterCardProps) {
   const busy = snapshot.operation !== null
   const downloading = snapshot.operation === "download"
   const canRetry = snapshot.error !== null && snapshot.phase !== "restartRequired"
@@ -54,6 +55,18 @@ export function UpdaterCard({ snapshot, onAction, onAutoDownload }: UpdaterCardP
             className="h-3.5 w-3.5 accent-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
           />
           Auto-download
+        </label>
+        <label className="mr-1 flex shrink-0 cursor-pointer items-center gap-2 text-slate-200">
+          <input
+            role="switch"
+            type="checkbox"
+            aria-label="Install downloaded updates automatically when the receiver is stopped"
+            checked={snapshot.autoInstallEnabled}
+            disabled={busy}
+            onChange={(event) => onAutoInstall(event.target.checked)}
+            className="h-3.5 w-3.5 accent-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          />
+          Auto-install
         </label>
         {snapshot.phase !== "restartRequired" && snapshot.phase !== "available" && snapshot.phase !== "ready" && (
           <button
@@ -109,6 +122,9 @@ export function UpdaterCard({ snapshot, onAction, onAutoDownload }: UpdaterCardP
                 <p className="mt-1 whitespace-pre-wrap break-words">{snapshot.notes}</p>
               </div>
             )}
+            <p className="text-xs text-muted-foreground">
+              Automatic installation runs only when the receiver is already stopped.
+            </p>
             <p className="text-xs text-muted-foreground">
               Updates change only the desktop app. The Nintendo DS ROM and its configuration stay unchanged.
             </p>

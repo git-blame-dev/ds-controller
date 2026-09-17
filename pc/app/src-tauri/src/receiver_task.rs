@@ -249,6 +249,18 @@ impl ReceiverController {
         Ok(())
     }
 
+    pub fn reserve_install_if_idle(&mut self) -> bool {
+        let safely_idle = self.lifecycle == LifecycleState::Normal
+            && self.stop_tx.is_none()
+            && self.join_handle.is_none()
+            && self.status() == RuntimeStatus::default();
+        if !safely_idle {
+            return false;
+        }
+        self.lifecycle = LifecycleState::InstallReserved;
+        true
+    }
+
     pub fn cancel_install_reservation(&mut self) {
         if self.lifecycle == LifecycleState::InstallReserved {
             self.lifecycle = LifecycleState::Normal;
@@ -635,6 +647,30 @@ mod tests {
         assert!(!receiver.ordinary_exit_requested());
         assert!(receiver.install_reserved());
         assert!(receiver.reserve_install().is_err());
+    }
+
+    #[test]
+    fn automatic_install_reservation_requires_an_already_idle_receiver() {
+        let mut idle = ReceiverController::default();
+        assert!(idle.reserve_install_if_idle());
+        assert!(idle.install_reserved());
+
+        let mut active = ReceiverController::default();
+        let (stop_tx, _stop_rx) = mpsc::channel();
+        active.stop_tx = Some(stop_tx);
+        assert!(!active.reserve_install_if_idle());
+        assert!(!active.install_reserved());
+
+        let mut unsafe_state = ReceiverController::default();
+        *unsafe_state.status.lock().unwrap() = RuntimeStatus {
+            receiver: ReceiverStatus::Error("synthetic receiver failure".to_owned()),
+            virtual_controller: VirtualControllerStatus::Error(
+                "synthetic neutral-output failure".to_owned(),
+            ),
+            ..RuntimeStatus::default()
+        };
+        assert!(!unsafe_state.reserve_install_if_idle());
+        assert!(!unsafe_state.install_reserved());
     }
 
     #[test]

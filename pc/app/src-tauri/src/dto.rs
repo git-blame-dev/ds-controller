@@ -10,6 +10,7 @@ pub struct AppSettingsDto {
     pub start_receiver_when_app_opens: bool,
     pub packet_logging_enabled: bool,
     pub auto_download_updates: bool,
+    pub auto_install_updates: bool,
 }
 
 impl From<AppSettings> for AppSettingsDto {
@@ -19,6 +20,7 @@ impl From<AppSettings> for AppSettingsDto {
             start_receiver_when_app_opens: settings.start_receiver_when_app_opens,
             packet_logging_enabled: settings.packet_logging_enabled,
             auto_download_updates: settings.auto_download_updates,
+            auto_install_updates: settings.auto_install_updates,
         }
     }
 }
@@ -30,6 +32,7 @@ impl From<AppSettingsDto> for AppSettings {
             start_receiver_when_app_opens: settings.start_receiver_when_app_opens,
             packet_logging_enabled: settings.packet_logging_enabled,
             auto_download_updates: settings.auto_download_updates,
+            auto_install_updates: settings.auto_install_updates,
             timeout_ms: AppSettings::default().timeout_ms,
         }
     }

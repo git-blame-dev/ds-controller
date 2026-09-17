@@ -38,6 +38,7 @@ pub fn save_settings(
             .map_err(|_| CommandErrorDto::state_unavailable())?;
         settings.packet_logging_enabled = current_settings.packet_logging_enabled;
         settings.auto_download_updates = current_settings.auto_download_updates;
+        settings.auto_install_updates = current_settings.auto_install_updates;
         settings.timeout_ms = current_settings.timeout_ms;
         settings::save_settings(&config_dir, &settings)
             .map_err(|error| CommandErrorDto::invalid_settings(error.to_string()))?;

@@ -39,10 +39,11 @@ pub fn run() {
                 Ok(settings) => settings,
                 Err(error) => {
                     eprintln!(
-                        "failed to load settings; automatic update downloads are disabled: {error}"
+                        "failed to load settings; automatic update downloads and installation are disabled: {error}"
                     );
                     settings::AppSettings {
                         auto_download_updates: false,
+                        auto_install_updates: false,
                         ..settings::AppSettings::default()
                     }
                 }
@@ -87,6 +88,7 @@ pub fn run() {
             updater::defer_update,
             updater::install_update,
             updater::set_auto_download_updates,
+            updater::set_auto_install_updates,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build DS Controller app")
