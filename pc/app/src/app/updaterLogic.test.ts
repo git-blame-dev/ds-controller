@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 
 import type { UpdatePhase, UpdateSnapshot } from "./types"
-import { createUpdaterSubscription, formatUpdateProgress, INITIAL_UPDATE_SNAPSHOT, selectFreshSnapshot, retryOperation, statusMessage } from "./updaterLogic"
+import { createUpdaterSubscription, formatUpdateProgress, INITIAL_UPDATE_SNAPSHOT, selectFreshSnapshot, retryOperation, statusMessage, updateStatusTone } from "./updaterLogic"
 
 const BASE_SNAPSHOT: UpdateSnapshot = {
   revision: 1,
@@ -40,6 +40,19 @@ test("missing release metadata is reported as temporarily unavailable", () => {
   const snapshot = { ...BASE_SNAPSHOT, phase: "unavailable", error: null } as const
 
   expect(statusMessage(snapshot)).toContain("not available yet")
+})
+
+test("initial update status does not claim the app is current", () => {
+  expect(statusMessage({ ...BASE_SNAPSHOT, error: null })).toContain("not been confirmed")
+})
+
+test("only a current update status uses the green indicator", () => {
+  expect(updateStatusTone({ ...BASE_SNAPSHOT, error: null })).toBe("neutral")
+  expect(updateStatusTone({ ...BASE_SNAPSHOT, phase: "current", error: null })).toBe("good")
+  expect(updateStatusTone({ ...BASE_SNAPSHOT, phase: "available", error: null })).toBe("neutral")
+  expect(updateStatusTone({ ...BASE_SNAPSHOT, phase: "ready", error: null })).toBe("neutral")
+  expect(updateStatusTone({ ...BASE_SNAPSHOT, operation: "check", error: null })).toBe("warn")
+  expect(updateStatusTone(BASE_SNAPSHOT)).toBe("bad")
 })
 
 describe("selectFreshSnapshot", () => {

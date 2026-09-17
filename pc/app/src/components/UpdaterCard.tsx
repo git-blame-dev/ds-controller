@@ -1,5 +1,5 @@
 import type { UpdateSnapshot } from "../app/types"
-import { formatUpdateProgress, statusMessage } from "../app/updaterLogic"
+import { formatUpdateProgress, statusMessage, updateStatusTone } from "../app/updaterLogic"
 import { StatusBadge } from "./StatusBadge"
 
 type UpdateAction = "check" | "download" | "defer" | "install" | "retry"
@@ -29,7 +29,7 @@ export function UpdaterCard({ snapshot, onAction, onAutoDownload }: UpdaterCardP
         v{snapshot.currentVersion || "unknown"}
       </span>
       <div role="status" aria-atomic="true" className="shrink-0">
-        <StatusBadge label={statusBadgeLabel(snapshot)} tone={statusTone(snapshot)} />
+        <StatusBadge label={statusBadgeLabel(snapshot)} tone={updateStatusTone(snapshot)} />
         <span className="sr-only">{statusMessage(snapshot)}</span>
       </div>
       {downloading && (
@@ -122,16 +122,10 @@ export function UpdaterCard({ snapshot, onAction, onAutoDownload }: UpdaterCardP
 function statusBadgeLabel(snapshot: UpdateSnapshot): string {
   if (snapshot.operation !== null) return "Working"
   if (snapshot.error !== null) return "Update error"
+  if (snapshot.phase === "current") return "Current"
   if (snapshot.phase === "unavailable") return "Unavailable"
   if (snapshot.phase === "available") return "Available"
   if (snapshot.phase === "ready") return "Ready"
   if (snapshot.phase === "restartRequired") return "Restart required"
-  return "Current"
-}
-
-function statusTone(snapshot: UpdateSnapshot): "good" | "warn" | "bad" | "neutral" {
-  if (snapshot.error !== null) return "bad"
-  if (snapshot.operation !== null || snapshot.phase === "available") return "warn"
-  if (snapshot.phase === "ready") return "good"
-  return "neutral"
+  return "Not checked"
 }

@@ -71,7 +71,15 @@ export function statusMessage(snapshot: UpdateSnapshot): string {
   if (snapshot.phase === "available") return `Update ${snapshot.availableVersion ?? ""} is available.`
   if (snapshot.phase === "ready") return "The verified update is ready to install."
   if (snapshot.phase === "restartRequired") return "Restart is required before using the receiver again."
-  return "The desktop app is up to date."
+  if (snapshot.phase === "current") return "The desktop app is up to date."
+  return "Update status has not been confirmed."
+}
+
+export function updateStatusTone(snapshot: UpdateSnapshot): "good" | "warn" | "bad" | "neutral" {
+  if (snapshot.error !== null) return "bad"
+  if (snapshot.operation !== null) return "warn"
+  if (snapshot.phase === "current") return "good"
+  return "neutral"
 }
 
 export function formatUpdateProgress(snapshot: UpdateSnapshot): string {

@@ -18,6 +18,7 @@ const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 #[serde(rename_all = "camelCase")]
 pub enum UpdatePhase {
     Idle,
+    Current,
     Unavailable,
     Available,
     Downloading,
@@ -262,7 +263,7 @@ impl<T> UpdateSession<T> {
         self.snapshot.phase = if self.resource.is_some() {
             UpdatePhase::Available
         } else {
-            UpdatePhase::Idle
+            UpdatePhase::Current
         };
     }
 
@@ -1090,6 +1091,18 @@ mod tests {
         assert_eq!(session.phase(), UpdatePhase::Idle);
         assert!(!session.has_payload());
         assert!(session.automatic_checks_suppressed());
+    }
+
+    #[test]
+    fn successful_check_without_an_update_marks_the_version_current() {
+        let mut session = UpdateSession::<()>::new("1.0.0".to_owned(), true);
+        let reservation = session
+            .reserve(UpdateOperation::Check, true)
+            .expect("check reserves the session");
+
+        session.finish_check(reservation, None, None, None);
+
+        assert_eq!(session.phase(), UpdatePhase::Current);
     }
 
     #[test]

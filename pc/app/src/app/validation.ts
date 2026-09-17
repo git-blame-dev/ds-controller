@@ -48,7 +48,7 @@ export function isUpdateSnapshot(value: unknown): value is UpdateSnapshot {
     !(value.error === null || typeof value.error === "string") ||
     typeof value.autoDownloadEnabled !== "boolean"
   ) return false
-  return ["idle", "unavailable", "available", "downloading", "ready", "installing", "restartRequired"].includes(value.phase) &&
+  return ["idle", "current", "unavailable", "available", "downloading", "ready", "installing", "restartRequired"].includes(value.phase) &&
     (value.operation === null || (typeof value.operation === "string" && ["check", "download", "install"].includes(value.operation))) &&
     Number.isSafeInteger(value.downloadedBytes) && value.downloadedBytes >= 0 &&
     (value.totalBytes === null || (Number.isSafeInteger(value.totalBytes) && value.totalBytes >= 0))

@@ -11,7 +11,7 @@ export interface AppSettings {
   readonly autoDownloadUpdates: boolean
 }
 
-export type UpdatePhase = "idle" | "unavailable" | "available" | "downloading" | "ready" | "installing" | "restartRequired"
+export type UpdatePhase = "idle" | "current" | "unavailable" | "available" | "downloading" | "ready" | "installing" | "restartRequired"
 export type UpdateOperation = "check" | "download" | "install"
 export interface UpdateSnapshot {
   readonly revision: number
